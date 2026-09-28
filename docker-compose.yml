@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: infinitycore_backend
+    ports:
+      - "8000:8000"
+    environment:
+      - PROJECT_NAME=InfinityCore Quantum Traffic Optimizer
+      - DEBUG=True
+      - DEFAULT_CITY=New Delhi (Connaught Place & Central Hub)
+    volumes:
+      - ./backend/app:/app/app
+    restart: unless-stopped
+
+networks:
+  default:
+    name: infinitycore_network
