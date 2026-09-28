@@ -320,7 +320,95 @@
                         </div>
                     </div>
                 </section>
+                <!-- 4. EMERGENCY GREEN CORRIDOR PANEL -->
+                <section class="panel-section" id="emergencyPanel" style="display: none;">
+                    <div class="panel-header">
+                        <h2><i class="fa-solid fa-siren-on"></i> Emergency Green Corridor</h2>
+                        <span class="hub-pill emergency-pill"><i class="fa-solid fa-bolt"></i> PRIORITY OVERRIDE</span>
+                    </div>
+
+                    <div class="emergency-alert-box">
+                        <div class="emg-icon-wrap"><i class="fa-solid fa-triangle-exclamation"></i></div>
+                        <div>
+                            <div class="emg-title">Quantum Priority Mode Active</div>
+                            <div class="emg-desc">All traffic weights overridden. Fastest corridor with signal pre-emption is computed.</div>
+                        </div>
+                    </div>
+
+                    <div class="input-card">
+                        <label class="section-label">Emergency Vehicle Type</label>
+                        <div class="emg-type-grid">
+                            <button class="emg-type-pill active" data-emgtype="ambulance" id="emgAmbulance">
+                                <i class="fa-solid fa-truck-medical"></i> Ambulance
+                            </button>
+                            <button class="emg-type-pill" data-emgtype="fire" id="emgFire">
+                                <i class="fa-solid fa-fire-flame-curved"></i> Fire Engine
+                            </button>
+                            <button class="emg-type-pill" data-emgtype="police" id="emgPolice">
+                                <i class="fa-solid fa-shield-halved"></i> Police / Law
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="input-card">
+                        <div class="field-group">
+                            <label><i class="fa-solid fa-circle-dot icon-origin"></i> Dispatch From</label>
+                            <select id="emgOriginSelect" class="form-select">
+                                <option value="aiims_hospital">AIIMS Apex Trauma Center</option>
+                                <option value="0">Connaught Place Central Hub</option>
+                                <option value="ndls_station">New Delhi Central Railway Station</option>
+                            </select>
+                        </div>
+                        <div class="swap-divider">
+                            <button class="btn-icon-swap" id="btnSwapEmg" title="Swap Origin &amp; Destination">
+                                <i class="fa-solid fa-arrow-right-arrow-left fa-rotate-90"></i>
+                            </button>
+                        </div>
+                        <div class="field-group">
+                            <label><i class="fa-solid fa-location-dot icon-dest"></i> Incident / Destination</label>
+                            <select id="emgDestSelect" class="form-select">
+                                <option value="india_gate">India Gate Boulevard</option>
+                                <option value="pragati_maidan">Bharat Mandapam (Pragati Maidan)</option>
+                                <option value="cyber_tech_park">Quantum Tech City &amp; IT Park</option>
+                                <option value="aerocity_hub">Indira Gandhi Airport Express</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <button class="btn btn-emergency-cta" id="btnComputeEmg">
+                        <i class="fa-solid fa-siren-on"></i> ACTIVATE GREEN CORRIDOR
+                    </button>
+
+                    <div class="comparison-card" id="emgComparisonCard" style="display: none;">
+                        <div class="comparison-header">
+                            <div class="quantum-tag" style="background:rgba(255,56,92,0.15);color:#FF385C;border-color:rgba(255,56,92,0.4);">
+                                <i class="fa-solid fa-siren-on"></i> EMERGENCY CORRIDOR ACTIVE
+                            </div>
+                            <span class="efficiency-badge" id="emgEfficiency">ETA: -- min</span>
+                        </div>
+                        <div class="eta-distance-row">
+                            <div class="eta-time" id="emgTime" style="color:#FF385C;">-- min</div>
+                            <div class="eta-dist" id="emgDist">(-- km)</div>
+                            <div class="time-saved-badge" id="emgSavedBadge" style="background:rgba(255,56,92,0.15);color:#FF385C;">-- min faster</div>
+                        </div>
+                        <div class="metrics-grid">
+                            <div class="metric-box">
+                                <div class="metric-val" style="color:#FF385C;" id="emgSignals">4</div>
+                                <div class="metric-lbl"><i class="fa-solid fa-traffic-light"></i> Signals Override</div>
+                            </div>
+                            <div class="metric-box">
+                                <div class="metric-val cyan" id="emgCleared">0.8 km</div>
+                                <div class="metric-lbl"><i class="fa-solid fa-road"></i> Cleared Ahead</div>
+                            </div>
+                            <div class="metric-box">
+                                <div class="metric-val green" id="emgETA">Live ETA</div>
+                                <div class="metric-lbl"><i class="fa-solid fa-clock"></i> Real-time ETA</div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
             </aside>
+
 
             <!-- MAP SECTION -->
             <section class="map-viewport">

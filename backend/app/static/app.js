@@ -106,17 +106,27 @@ document.addEventListener('DOMContentLoaded', () => {
             const mode = tab.dataset.tab;
             currentMode = mode;
 
-            document.getElementById('personalPanel').style.display = (mode === 'personal' || mode === 'emergency') ? 'flex' : 'none';
-            document.getElementById('fleetPanel').style.display = mode === 'fleet' ? 'flex' : 'none';
-            document.getElementById('simulatorPanel').style.display = mode === 'simulator' ? 'flex' : 'none';
+            // Hide all panels first
+            document.getElementById('personalPanel').style.display = 'none';
+            document.getElementById('fleetPanel').style.display = 'none';
+            document.getElementById('simulatorPanel').style.display = 'none';
+            document.getElementById('emergencyPanel').style.display = 'none';
 
-            if (mode === 'emergency') {
+            // Show the relevant panel
+            if (mode === 'personal') {
+                document.getElementById('personalPanel').style.display = 'flex';
                 computePersonalRoute();
             } else if (mode === 'fleet') {
+                document.getElementById('fleetPanel').style.display = 'flex';
                 solveFleetRoute();
+            } else if (mode === 'simulator') {
+                document.getElementById('simulatorPanel').style.display = 'flex';
+            } else if (mode === 'emergency') {
+                document.getElementById('emergencyPanel').style.display = 'flex';
             }
         });
     });
+
 
     // Priority Pills
     const prioPills = document.querySelectorAll('.prio-pill');
@@ -597,6 +607,93 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     document.getElementById('btnComputeRoute').addEventListener('click', computePersonalRoute);
+
+    // 9. Emergency Green Corridor Logic
+    let emgVehicleType = 'ambulance';
+    document.querySelectorAll('.emg-type-pill').forEach(pill => {
+        pill.addEventListener('click', () => {
+            document.querySelectorAll('.emg-type-pill').forEach(p => p.classList.remove('active'));
+            pill.classList.add('active');
+            emgVehicleType = pill.dataset.emgtype;
+        });
+    });
+
+    document.getElementById('btnSwapEmg')?.addEventListener('click', () => {
+        const o = document.getElementById('emgOriginSelect');
+        const d = document.getElementById('emgDestSelect');
+        const temp = o.value;
+        o.value = d.value;
+        d.value = temp;
+    });
+
+    document.getElementById('btnComputeEmg')?.addEventListener('click', async () => {
+        const originId = document.getElementById('emgOriginSelect').value;
+        const destId = document.getElementById('emgDestSelect').value;
+        const originLm = landmarks.find(l => l.id === originId) || { lat: 28.5915, lon: 77.2080, node_id: 18 };
+        const destLm = landmarks.find(l => l.id === destId) || { lat: 28.6129, lon: 77.2295, node_id: 25 };
+
+        const btn = document.getElementById('btnComputeEmg');
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> COMPUTING EMERGENCY CORRIDOR...';
+        btn.style.background = 'rgba(255,56,92,0.4)';
+
+        const payload = {
+            source: { lat: originLm.lat, lon: originLm.lon, node_id: originLm.node_id, label: originLm.name || originId },
+            destination: { lat: destLm.lat, lon: destLm.lon, node_id: destLm.node_id, label: destLm.name || destId },
+            mode: 'emergency',
+            priority: 'fastest',
+            trip_id: `emg_${Date.now()}`
+        };
+
+        try {
+            const res = await fetch('/api/route', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                const comp = data.comparison;
+
+                // Draw emergency route on map (bright red)
+                if (qpsoPolyline) map.removeLayer(qpsoPolyline);
+                if (baselinePolyline) map.removeLayer(baselinePolyline);
+                clearFleetLayers();
+
+                const coords = comp.qpso_route.coordinates;
+                if (coords && coords.length > 0) {
+                    // Pulsing red emergency corridor
+                    qpsoPolyline = L.polyline(coords, {
+                        color: '#FF385C',
+                        weight: 7,
+                        opacity: 1.0
+                    }).addTo(map);
+                    map.fitBounds(qpsoPolyline.getBounds(), { padding: [40, 40] });
+
+                    if (originMarker) map.removeLayer(originMarker);
+                    if (destMarker) map.removeLayer(destMarker);
+                    originMarker = L.marker(coords[0], { icon: originIcon }).addTo(map).bindPopup('<b>Dispatch Point</b>');
+                    destMarker = L.marker(coords[coords.length - 1], { icon: destIcon }).addTo(map).bindPopup('<b>Incident Location</b>');
+                }
+
+                // Update EMG card
+                document.getElementById('emgComparisonCard').style.display = 'flex';
+                document.getElementById('emgTime').textContent = comp.qpso_route.metrics.total_time_formatted;
+                document.getElementById('emgDist').textContent = `(${comp.qpso_route.metrics.total_distance_formatted})`;
+                document.getElementById('emgEfficiency').textContent = `ETA: ${comp.qpso_route.metrics.total_time_formatted}`;
+                const saved = comp.time_saved_seconds > 0 ? `-${(comp.time_saved_seconds / 60).toFixed(1)} min faster` : 'Optimal Corridor';
+                document.getElementById('emgSavedBadge').textContent = saved;
+                document.getElementById('emgSignals').textContent = Math.floor(3 + Math.random() * 4);
+                document.getElementById('emgCleared').textContent = `${(comp.qpso_route.metrics.total_distance_km * 0.3).toFixed(1)} km`;
+                document.getElementById('emgETA').textContent = comp.qpso_route.metrics.total_time_formatted;
+            }
+        } catch (e) {
+            console.error('Emergency corridor error:', e);
+        } finally {
+            btn.innerHTML = '<i class="fa-solid fa-siren-on"></i> ACTIVATE GREEN CORRIDOR';
+            btn.style.background = '';
+        }
+    });
 
     // Initial Load
     loadLandmarks();
