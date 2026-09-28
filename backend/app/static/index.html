@@ -2,9 +2,20 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>QPath – Adaptive Quantum-Inspired Traffic Route Optimizer</title>
     <meta name="description" content="Quantum-behaved Particle Swarm Optimization (QPSO) multi-objective traffic navigation and fleet logistics dispatch platform.">
+    
+    <!-- PWA & Mobile Web App Meta Tags -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0a0e1a">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="QPath">
+    <link rel="apple-touch-icon" href="/static/icons/icon-180.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="/static/icons/icon-512.png">
     
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -21,6 +32,32 @@
     <link rel="stylesheet" href="/static/index.css">
 </head>
 <body class="dark-theme">
+    <!-- PWA Offline Banner -->
+    <div id="offlineBanner" class="pwa-toast-banner offline" style="display: none;">
+        <i class="fa-solid fa-wifi-slash"></i>
+        <span>Offline Mode: Using cached route data & tiles.</span>
+    </div>
+
+    <!-- PWA Update Available Banner -->
+    <div id="pwaUpdateBanner" class="pwa-toast-banner update" style="display: none;">
+        <i class="fa-solid fa-cloud-arrow-down"></i>
+        <span>New QPath version available!</span>
+        <button id="btnPwaUpdateReload" class="btn-banner-action">Refresh</button>
+    </div>
+
+    <!-- Cold Start / Server Wakeup Banner -->
+    <div id="serverColdStartBanner" class="pwa-toast-banner waking" style="display: none;">
+        <i class="fa-solid fa-spinner fa-spin"></i>
+        <span>Waking up cloud quantum engine (free-tier spin-up)...</span>
+    </div>
+
+    <!-- iOS Safari Install Hint -->
+    <div id="iosInstallHint" class="pwa-toast-banner ios-hint" style="display: none;">
+        <i class="fa-solid fa-arrow-up-from-bracket"></i>
+        <span>Install QPath on iPhone: Tap <b>Share</b> then <b>Add to Home Screen</b>.</span>
+        <button id="btnCloseIosHint" class="btn-close-toast">&times;</button>
+    </div>
+
     <div class="app-container">
         <!-- TOP HEADER BAR -->
         <header class="top-navbar">
@@ -51,8 +88,11 @@
             </nav>
 
             <div class="header-actions">
+                <button class="btn btn-cyan btn-install-pwa" id="btnInstallPwa" style="display: none;">
+                    <i class="fa-solid fa-download"></i> Install App
+                </button>
                 <button class="btn btn-purple" id="btnJudgeConsole">
-                    <i class="fa-solid fa-bolt"></i> Live Simulation Demo Panel
+                    <i class="fa-solid fa-bolt"></i> Demo Console
                 </button>
                 <a href="/docs" target="_blank" class="api-docs-link" title="FastAPI Swagger Documentation">
                     <i class="fa-solid fa-book"></i> API Docs
@@ -62,8 +102,12 @@
 
         <!-- MAIN LAYOUT (SIDEBAR + MAP) -->
         <main class="main-content">
-            <!-- SIDEBAR CONTROLS -->
+            <!-- SIDEBAR CONTROLS (DESKTOP SIDEBAR / MOBILE BOTTOM SHEET) -->
             <aside class="sidebar" id="sidebar">
+                <!-- Mobile Bottom Sheet Drag Handle -->
+                <div class="mobile-drawer-handle" id="drawerHandle" title="Swipe or tap to expand/collapse panel">
+                    <span class="handle-bar"></span>
+                </div>
                 <!-- 1. PERSONAL COMMUTE PANEL -->
                 <section class="panel-section active" id="personalPanel">
                     <div class="panel-header">

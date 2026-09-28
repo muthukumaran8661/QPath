@@ -15,10 +15,18 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# Cross-Origin Resource Sharing (CORS)
+# Cross-Origin Resource Sharing (CORS) - Support Web, Render, and Capacitor Mobile
+capacitor_origins = [
+    "https://localhost",
+    "capacitor://localhost",
+    "http://localhost",
+    "https://qpath.onrender.com",
+    "*"
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=capacitor_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -44,6 +52,24 @@ async def serve_index():
         "version": settings.VERSION,
         "docs": "/docs"
     }
+
+@app.get("/manifest.json", summary="PWA Web App Manifest")
+async def serve_manifest():
+    manifest_file = os.path.join(static_dir, "manifest.json")
+    if os.path.exists(manifest_file):
+        return FileResponse(manifest_file, media_type="application/manifest+json")
+    return {"name": "QPath"}
+
+@app.get("/sw.js", summary="PWA Service Worker")
+async def serve_sw():
+    sw_file = os.path.join(static_dir, "sw.js")
+    if os.path.exists(sw_file):
+        return FileResponse(
+            sw_file,
+            media_type="application/javascript",
+            headers={"Service-Worker-Allowed": "/", "Cache-Control": "no-cache"}
+        )
+    return ""
 
 @app.get("/health", summary="Service Health Check")
 async def health():

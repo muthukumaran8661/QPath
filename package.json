@@ -1,0 +1,35 @@
+{
+  "name": "qpath",
+  "version": "1.0.0",
+  "description": "QPath - Quantum Route Optimizer",
+  "main": "backend/app/static/index.html",
+  "scripts": {
+    "build:mobile": "npx cap sync android",
+    "open:android": "npx cap open android",
+    "cap:run": "npx cap run android",
+    "cap:sync": "npx cap sync"
+  },
+  "keywords": [
+    "quantum",
+    "qpso",
+    "routing",
+    "traffic",
+    "capacitor",
+    "android",
+    "pwa"
+  ],
+  "author": "QPath Team",
+  "license": "MIT",
+  "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/cli": "^8.5.2",
+    "@capacitor/core": "^8.5.2",
+    "@capacitor/geolocation": "^8.2.2",
+    "@capacitor/haptics": "^8.0.2",
+    "@capacitor/local-notifications": "^8.3.1",
+    "@capacitor/network": "^8.0.1",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.3"
+  }
+}

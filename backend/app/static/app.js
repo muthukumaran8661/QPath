@@ -1,5 +1,45 @@
 // QPath Quantum Traffic Optimizer - Web Application Logic
 document.addEventListener('DOMContentLoaded', () => {
+    // 0. Environment & Native Capacitor Configuration
+    const isCapacitor = window.Capacitor !== undefined || window.location.protocol === 'capacitor:' || (window.location.hostname === 'localhost' && window.location.port !== '8000');
+    const API_BASE_URL = isCapacitor ? 'https://qpath.onrender.com' : '';
+
+    // Render Free Tier Cold-Start handling wrapper
+    async function apiFetch(endpoint, options = {}) {
+        const banner = document.getElementById('serverColdStartBanner');
+        let timer = setTimeout(() => {
+            if (banner) banner.style.display = 'flex';
+        }, 2200);
+
+        try {
+            const fullUrl = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint}`;
+            const res = await fetch(fullUrl, options);
+            clearTimeout(timer);
+            if (banner) banner.style.display = 'none';
+            return res;
+        } catch (err) {
+            clearTimeout(timer);
+            if (banner) banner.style.display = 'none';
+            throw err;
+        }
+    }
+
+    function getWebSocketUrl(path) {
+        if (isCapacitor) {
+            return `wss://qpath.onrender.com${path}`;
+        }
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        return `${protocol}//${window.location.host}${path}`;
+    }
+
+    function triggerHaptic() {
+        if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Haptics) {
+            try {
+                window.Capacitor.Plugins.Haptics.impact({ style: 'Medium' });
+            } catch (e) {}
+        }
+    }
+
     // 1. Initialize Leaflet Map
     const map = L.map('map', {
         center: [28.6315, 77.2167], // Default: New Delhi Center
@@ -222,15 +262,37 @@ document.addEventListener('DOMContentLoaded', () => {
         emgDestCoords = { lat: item.lat, lon: item.lon, label: item.name };
     });
 
-    // "Use My Current Location" (Browser Geolocation)
+    // "Use My Current Location" (Browser & Capacitor Geolocation)
     const btnUseLocation = document.getElementById('btnUseCurrentLocation');
     if (btnUseLocation) {
-        btnUseLocation.addEventListener('click', () => {
+        btnUseLocation.addEventListener('click', async () => {
+            btnUseLocation.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Locating...';
+
+            // Check if Capacitor Geolocation Plugin is available
+            if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Geolocation) {
+                try {
+                    const position = await window.Capacitor.Plugins.Geolocation.getCurrentPosition({ enableHighAccuracy: true });
+                    const lat = position.coords.latitude;
+                    const lon = position.coords.longitude;
+                    const placeName = await reverseGeocode(lat, lon);
+                    originCoords = { lat, lon, label: placeName };
+                    document.getElementById('originInput').value = placeName;
+                    const clearOrigin = document.getElementById('btnClearOrigin');
+                    if (clearOrigin) clearOrigin.style.display = 'block';
+                    btnUseLocation.innerHTML = '<i class="fa-solid fa-location-crosshairs"></i> My Location';
+                    computePersonalRoute();
+                    return;
+                } catch (capErr) {
+                    console.warn('Capacitor geolocation fallback to browser:', capErr);
+                }
+            }
+
             if (!navigator.geolocation) {
                 alert('Geolocation is not supported by your browser.');
+                btnUseLocation.innerHTML = '<i class="fa-solid fa-location-crosshairs"></i> My Location';
                 return;
             }
-            btnUseLocation.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Locating...';
+
             navigator.geolocation.getCurrentPosition(
                 async (position) => {
                     const lat = position.coords.latitude;
@@ -246,7 +308,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 (err) => {
                     console.warn('Geolocation error:', err);
                     btnUseLocation.innerHTML = '<i class="fa-solid fa-location-crosshairs"></i> My Location';
-                    alert('Unable to retrieve your current location. Please allow location permissions in your browser.');
+                    alert('Unable to retrieve your current location. Please allow location permissions in your browser or device settings.');
                 },
                 { enableHighAccuracy: true, timeout: 8000 }
             );
@@ -260,7 +322,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const lat = parseFloat(pill.dataset.lat);
             const lon = parseFloat(pill.dataset.lon);
 
-            // Set destination to selected quick city
             destCoords = { lat, lon, label: city };
             document.getElementById('destInput').value = city;
             const clearDest = document.getElementById('btnClearDest');
@@ -274,12 +335,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const originInput = document.getElementById('originInput');
         const destInput = document.getElementById('destInput');
 
-        // Swap coordinates
         const tempCoords = { ...originCoords };
         originCoords = { ...destCoords };
         destCoords = tempCoords;
 
-        // Swap input text
         const tempVal = originInput.value;
         originInput.value = destInput.value;
         destInput.value = tempVal;
@@ -293,16 +352,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const lon = e.latlng.lng;
         const placeName = await reverseGeocode(lat, lon);
 
-        // Calculate distance to current origin and dest
         const distToOrigin = Math.hypot(lat - originCoords.lat, lon - originCoords.lon);
         const distToDest = Math.hypot(lat - destCoords.lat, lon - destCoords.lon);
 
         if (distToOrigin < distToDest) {
-            // Closer to origin -> update origin
             originCoords = { lat, lon, label: placeName };
             document.getElementById('originInput').value = placeName;
         } else {
-            // Closer to dest -> update dest
             destCoords = { lat, lon, label: placeName };
             document.getElementById('destInput').value = placeName;
         }
@@ -319,13 +375,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const mode = tab.dataset.tab;
             currentMode = mode;
 
-            // Hide all panels first
             document.getElementById('personalPanel').style.display = 'none';
             document.getElementById('fleetPanel').style.display = 'none';
             document.getElementById('simulatorPanel').style.display = 'none';
             document.getElementById('emergencyPanel').style.display = 'none';
 
-            // Show the relevant panel
             if (mode === 'personal') {
                 document.getElementById('personalPanel').style.display = 'flex';
                 computePersonalRoute();
@@ -369,7 +423,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (btn) btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> OPTIMIZING QUANTUM ROUTE...';
 
         try {
-            const res = await fetch('/api/route', {
+            const res = await apiFetch('/api/route', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
@@ -377,6 +431,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (res.ok) {
                 const data = await res.json();
+                triggerHaptic();
                 renderRouteComparison(data.comparison);
             } else {
                 const errData = await res.json();
@@ -436,10 +491,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 opacity: 0.95
             }).addTo(map);
 
-            // Auto-zoom map bounds to fit route
             map.fitBounds(qpsoPolyline.getBounds(), { padding: [40, 40] });
 
-            // Place draggable Origin and Destination markers
             const startPt = qpsoCoords[0];
             const endPt = qpsoCoords[qpsoCoords.length - 1];
 
@@ -449,7 +502,6 @@ document.addEventListener('DOMContentLoaded', () => {
             destMarker = L.marker(endPt, { icon: destIcon, draggable: true }).addTo(map)
                 .bindPopup(`<b>Destination:</b> ${destCoords.label || 'Destination'}<br><small>Drag marker to adjust</small>`);
 
-            // Marker Drag Events
             originMarker.on('dragend', async (e) => {
                 const pos = e.target.getLatLng();
                 originCoords.lat = pos.lat;
@@ -498,7 +550,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const coords = lastComparisonData.qpso_route.coordinates;
         if (!coords || coords.length === 0) return;
 
-        // Initialize WebSocket connection for live reroute alerts
         initWebSocket(currentTripId);
 
         let coordIdx = 0;
@@ -540,8 +591,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function initWebSocket(tripId) {
         if (wsConnection) wsConnection.close();
 
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.host}/ws/route/${tripId}`;
+        const wsUrl = getWebSocketUrl(`/ws/route/${tripId}`);
 
         try {
             wsConnection = new WebSocket(wsUrl);
@@ -559,6 +609,7 @@ document.addEventListener('DOMContentLoaded', () => {
             wsConnection.onmessage = (event) => {
                 const data = JSON.parse(event.data);
                 if (data.type === 'REROUTE_RECOMMENDATION') {
+                    triggerHaptic();
                     showIncidentToast(data);
                 }
             };
@@ -666,7 +717,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (btn) btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> PARTITIONING VEHICLE TOURS...';
 
         try {
-            const res = await fetch('/api/fleet/route', {
+            const res = await apiFetch('/api/fleet/route', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
@@ -768,7 +819,7 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> COMPUTING MONTE CARLO STRESS TEST...';
 
         try {
-            const res = await fetch('/api/simulate', {
+            const res = await apiFetch('/api/simulate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
@@ -809,7 +860,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function injectDemoIncident(type, desc) {
         judgeModal.style.display = 'none';
         try {
-            const res = await fetch('/api/incident', {
+            const res = await apiFetch('/api/incident', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -844,7 +895,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('btnResetGraph')?.addEventListener('click', async () => {
         judgeModal.style.display = 'none';
-        await fetch('/api/reset', { method: 'POST' });
+        await apiFetch('/api/reset', { method: 'POST' });
         computePersonalRoute();
     });
 
@@ -886,7 +937,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         try {
-            const res = await fetch('/api/route', {
+            const res = await apiFetch('/api/route', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
@@ -895,8 +946,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (res.ok) {
                 const data = await res.json();
                 const comp = data.comparison;
+                triggerHaptic();
 
-                // Draw emergency route on map (bright pulsing red)
                 if (qpsoPolyline) map.removeLayer(qpsoPolyline);
                 if (baselinePolyline) map.removeLayer(baselinePolyline);
                 alternativePolylines.forEach(p => map.removeLayer(p));
@@ -934,6 +985,129 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.style.background = '';
         }
     });
+
+    // 11. PWA Service Worker Registration & Lifecycle
+    if ('serviceWorker' in navigator && (window.location.protocol === 'https:' || window.location.hostname === 'localhost')) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js').then((reg) => {
+                reg.addEventListener('updatefound', () => {
+                    const newWorker = reg.installing;
+                    if (newWorker) {
+                        newWorker.addEventListener('statechange', () => {
+                            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                const updateBanner = document.getElementById('pwaUpdateBanner');
+                                if (updateBanner) updateBanner.style.display = 'flex';
+                                document.getElementById('btnPwaUpdateReload')?.addEventListener('click', () => {
+                                    newWorker.postMessage('skipWaiting');
+                                    window.location.reload();
+                                });
+                            }
+                        });
+                    }
+                });
+            }).catch((err) => console.warn('ServiceWorker registration error:', err));
+        });
+    }
+
+    // 12. PWA BeforeInstallPrompt (Custom Install Button)
+    let deferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        const installBtn = document.getElementById('btnInstallPwa');
+        if (installBtn) installBtn.style.display = 'inline-flex';
+    });
+
+    document.getElementById('btnInstallPwa')?.addEventListener('click', async () => {
+        if (deferredPrompt) {
+            deferredPrompt.prompt();
+            const { outcome } = await deferredPrompt.userChoice;
+            if (outcome === 'accepted') {
+                const btn = document.getElementById('btnInstallPwa');
+                if (btn) btn.style.display = 'none';
+            }
+            deferredPrompt = null;
+        }
+    });
+
+    // 13. iOS Safari Install Hint
+    const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const isStandalone = window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
+    if (isIos && !isStandalone && !isCapacitor) {
+        const iosHint = document.getElementById('iosInstallHint');
+        if (iosHint) {
+            setTimeout(() => { iosHint.style.display = 'flex'; }, 3000);
+            document.getElementById('btnCloseIosHint')?.addEventListener('click', () => {
+                iosHint.style.display = 'none';
+            });
+        }
+    }
+
+    // 14. Network Status Listeners
+    window.addEventListener('offline', () => {
+        const b = document.getElementById('offlineBanner');
+        if (b) b.style.display = 'flex';
+    });
+    window.addEventListener('online', () => {
+        const b = document.getElementById('offlineBanner');
+        if (b) b.style.display = 'none';
+    });
+
+    // 15. Mobile Drawer Handle Interaction
+    const drawerHandle = document.getElementById('drawerHandle');
+    const sidebar = document.getElementById('sidebar');
+    if (drawerHandle && sidebar) {
+        drawerHandle.addEventListener('click', () => {
+            if (sidebar.classList.contains('expanded')) {
+                sidebar.classList.remove('expanded');
+                sidebar.classList.add('collapsed');
+            } else if (sidebar.classList.contains('collapsed')) {
+                sidebar.classList.remove('collapsed');
+            } else {
+                sidebar.classList.add('expanded');
+            }
+        });
+    }
+
+    // 16. Capacitor Native Plugins Initialization
+    if (window.Capacitor && window.Capacitor.Plugins) {
+        try {
+            const { StatusBar, Style } = window.Capacitor.Plugins.StatusBar || {};
+            if (StatusBar) {
+                StatusBar.setStyle({ style: Style.Dark });
+                StatusBar.setBackgroundColor({ color: '#0A0E1A' });
+            }
+            const { SplashScreen } = window.Capacitor.Plugins.SplashScreen || {};
+            if (SplashScreen) {
+                SplashScreen.hide();
+            }
+            const { App } = window.Capacitor.Plugins.App || {};
+            if (App) {
+                App.addListener('backButton', ({ canGoBack }) => {
+                    const modal = document.getElementById('judgeModal');
+                    if (modal && modal.style.display !== 'none') {
+                        modal.style.display = 'none';
+                        return;
+                    }
+                    if (sidebar && sidebar.classList.contains('expanded')) {
+                        sidebar.classList.remove('expanded');
+                        return;
+                    }
+                    if (document.getElementById('navigationCard')?.style.display === 'block') {
+                        document.getElementById('btnStopNav')?.click();
+                        return;
+                    }
+                    if (canGoBack) {
+                        window.history.back();
+                    } else {
+                        App.exitApp();
+                    }
+                });
+            }
+        } catch (e) {
+            console.warn('Capacitor native setup error:', e);
+        }
+    }
 
     // Initial Load: Compute route between default locations (CP to India Gate)
     computePersonalRoute();

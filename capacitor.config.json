@@ -1,0 +1,31 @@
+{
+  "appId": "com.infinitycore.qpath",
+  "appName": "QPath",
+  "webDir": "backend/app/static",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 2000,
+      "launchAutoHide": true,
+      "backgroundColor": "#0A0E1A",
+      "androidSplashResourceName": "splash",
+      "androidScaleType": "CENTER_CROP",
+      "showSpinner": true,
+      "androidSpinnerStyle": "small",
+      "spinnerColor": "#00F0FF"
+    },
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#0A0E1A"
+    },
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_icon_config_sample",
+      "iconColor": "#00F0FF",
+      "sound": "beep.wav"
+    }
+  }
+}
