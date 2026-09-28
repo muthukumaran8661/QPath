@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: infinitycore-backend
+    name: qpath-backend
     env: docker
     dockerfilePath: ./Dockerfile
     plan: free

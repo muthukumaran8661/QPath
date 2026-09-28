@@ -7,18 +7,18 @@ void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(
     const ProviderScope(
-      child: InfinityCoreApp(),
+      child: QPathApp(),
     ),
   );
 }
 
-class InfinityCoreApp extends StatelessWidget {
-  const InfinityCoreApp({Key? key}) : super(key: key);
+class QPathApp extends StatelessWidget {
+  const QPathApp({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'InfinityCore Quantum Route Optimizer',
+      title: 'QPath – Quantum Route Optimizer',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme,
       home: const SplashScreen(),

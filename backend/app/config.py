@@ -5,7 +5,7 @@ import os
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="allow")
 
-    PROJECT_NAME: str = "InfinityCore Quantum Traffic Optimizer"
+    PROJECT_NAME: str = "QPath Quantum Traffic Optimizer"
     VERSION: str = "1.0.0"
     API_PREFIX: str = "/api"
     DEBUG: bool = True

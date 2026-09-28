@@ -181,7 +181,7 @@ class TrafficSimulator:
         ai_rec = (
             f"Under {scenario.scenario_name} (Peak Factor: {total_multiplier:.2f}x, {scenario.weather.value}), "
             f"standard routing experiences gridlock (+{(t_stressed_std - t_base)/60:.1f} min delay). "
-            f"InfinityCore QPSO proactively diverted via clear peripheral corridors, saving {time_saved_by_qpso_in_stress/60:.1f} min "
+            f"QPath QPSO proactively diverted via clear peripheral corridors, saving {time_saved_by_qpso_in_stress/60:.1f} min "
             f"and avoiding {stressed_comp.congestion_reduction_percent}% congested choke-points."
         )
 

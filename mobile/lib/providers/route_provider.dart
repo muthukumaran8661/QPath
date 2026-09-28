@@ -147,7 +147,7 @@ class RouteNotifier extends StateNotifier<RouteState> {
     } else {
       state = state.copyWith(
         isLoading: false,
-        errorMessage: 'Failed to reach InfinityCore Quantum Engine. Check backend connection.',
+        errorMessage: 'Failed to reach QPath Quantum Engine. Check backend connection.',
       );
     }
   }

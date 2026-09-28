@@ -1,4 +1,4 @@
-// InfinityCore Quantum Traffic Optimizer - Web Application Logic
+// QPath Quantum Traffic Optimizer - Web Application Logic
 document.addEventListener('DOMContentLoaded', () => {
     // 1. Initialize Leaflet Map
     const map = L.map('map', {

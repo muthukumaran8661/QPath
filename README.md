@@ -1,5 +1,4 @@
-# InfinityCore – Adaptive Quantum-Inspired Traffic Route Optimizer
-**Smart India Hackathon (SIH) 2026 Grand Finale MVP**
+# QPath – Adaptive Quantum-Inspired Traffic Route Optimizer
 
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688.svg?style=flat&logo=fastapi)](https://fastapi.tiangolo.com)
 [![Flutter](https://img.shields.io/badge/Mobile-Flutter%203-02569B.svg?style=flat&logo=flutter)](https://flutter.dev)
@@ -9,7 +8,7 @@
 ---
 
 ## 🌟 Executive Overview
-**InfinityCore** is an enterprise-grade, quantum-inspired multi-objective traffic navigation and fleet logistics optimization platform. Built specifically for Smart India Hackathon 2026, it replaces static single-metric routing (distance/time) with an adaptive **Delta-Potential Quantum-behaved Particle Swarm Optimization (QPSO)** engine.
+**QPath** is an enterprise-grade, quantum-inspired multi-objective traffic navigation and fleet logistics optimization platform. It replaces static single-metric routing (distance/time) with an adaptive **Delta-Potential Quantum-behaved Particle Swarm Optimization (QPSO)** engine that balances travel time, distance, real-time congestion, and road quality simultaneously.
 
 ### Key Capabilities
 1. **Multi-Objective Quantum Routing**: Simultaneously optimizes **Travel Time**, **Physical Distance**, **Real-time Congestion**, and **Road Quality / Pothole Avoidance** ($w_1 \cdot T + w_2 \cdot D + w_3 \cdot C + w_4 \cdot R$).
@@ -17,7 +16,7 @@
 3. **Multi-Stop Fleet Dispatch (Capacitated VRP)**: Multi-vehicle delivery partitioner with TSP 2-opt clustering and QPSO street routing.
 4. **Emergency Green Corridor**: Zero-latency priority override mode for ambulances and first responders.
 5. **What-If Scenario Simulator**: Pre-trip stress tester simulating monsoon floods, peak rush-hour bottlenecks, and sudden highway closures.
-6. **SIH Judge Demo Console**: Interactive in-app console for judges to inject incidents and observe real-time reroutes live.
+6. **Live Demo Console**: Interactive in-app console to inject incidents and observe real-time reroutes live.
 
 ---
 
@@ -38,19 +37,20 @@ In Quantum-behaved PSO, particles move without deterministic velocity, governed 
 ## 🏗️ Architecture & Technology Stack
 
 ```
-infinitycore/
+qpath/
 ├── backend/                  # Python FastAPI Backend & Quantum Engine
 │   ├── app/
 │   │   ├── api/              # REST Endpoints & WebSocket Router
 │   │   ├── optimizer/        # QPSO Pure NumPy Engine & Fleet VRP Solver
 │   │   ├── simulator/        # Dynamic Incident Engine & What-If Simulator
 │   │   ├── models/           # Pydantic v2 Schemas & DTOs
+│   │   ├── static/           # Web Dashboard (HTML/CSS/JS with Leaflet OSM)
 │   │   ├── config.py         # App Configuration
 │   │   └── main.py           # FastAPI Entry Point
-│   ├── tests/                # Pytest Unit Test Suite (11 passing tests)
+│   ├── tests/                # Pytest Unit Test Suite
 │   ├── Dockerfile            # Container definition
 │   └── requirements.txt      # Python dependencies
-├── mobile/                   # Flutter Mobile App (Android / Web / iOS)
+├── mobile/                   # Flutter Mobile App (Android / iOS)
 │   ├── lib/
 │   │   ├── core/             # Theme & Tokens (Material 3 Cyber Neon)
 │   │   ├── models/           # Dart Data Models
@@ -75,11 +75,10 @@ cd backend
 # Install dependencies
 pip install -r requirements.txt
 
-# Run Unit Tests
-python -m pytest backend/tests/ -v
-
 # Start FastAPI Server (Swagger docs at http://127.0.0.1:8000/docs)
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+# Web Dashboard → http://127.0.0.1:8000
 ```
 
 ### 2. Run Backend with Docker
@@ -111,19 +110,19 @@ flutter run
 
 ---
 
-## 🎤 SIH 2026 3-Minute Live Judge Demo Script
+## 🎤 3-Minute Live Demo Script
 
 1. **The Hook (0:00 - 0:45)**:
-   - *"Current GPS tools optimize solely for distance or delayed traffic data. InfinityCore introduces Quantum-behaved Particle Swarm Optimization to discover hidden clear corridors while balancing road roughness, emissions, and congestion."*
+   - *"Current GPS tools optimize solely for distance or delayed traffic data. QPath introduces Quantum-behaved Particle Swarm Optimization to discover hidden clear corridors while balancing road roughness, emissions, and congestion."*
 2. **Personal Route & Quantum Comparison (0:45 - 1:30)**:
    - Select Origin (*CP Central Hub*) and Destination (*India Gate*).
    - Show the **Quantum Comparison Card**: 18% time saved, 35% traffic avoided, smooth pothole-free route.
-3. **Live Re-Routing & Judge Console (1:30 - 2:15)**:
+3. **Live Re-Routing & Demo Console (1:30 - 2:15)**:
    - Tap **"Start Quantum Navigation"**. The vehicle begins simulated travel.
-   - Tap the **Purple Bolt Icon** to open the **SIH Judge Demo Console**.
+   - Tap the **Purple Bolt Icon** to open the **Live Simulation Demo Console**.
    - Tap **"Inject Accident"**.
-   - Watch the animated alert banner appear immediately via WebSocket: *"Incident Ahead! Quantum detour saves 6.4 min [ACCEPT DETOUR]"*.
-   - Tap Accept, and observe the polyline instantly adapt to bypass the roadblock.
+   - Watch the animated alert banner appear immediately via WebSocket.
+   - Tap Accept and observe the polyline instantly adapt to bypass the roadblock.
 4. **Fleet VRP & What-If Simulator (2:15 - 3:00)**:
    - Switch to **Fleet VRP Mode**: show multi-drop logistics divided across 2 color-coded delivery vans.
-   - Open **What-If Simulator**: drag the slider to 8:30 AM Monsoon Rain to show predictive traffic stress testing before traveling.
+   - Open **What-If Simulator**: drag the slider to 8:30 AM Monsoon Rain to show predictive traffic stress testing.

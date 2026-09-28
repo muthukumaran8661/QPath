@@ -74,7 +74,7 @@ class ConnectionManager:
         if old_route and old_route.metrics:
             time_saved = max(old_route.metrics.total_time_seconds - comp.qpso_route.metrics.total_time_seconds, 0.0)
 
-        alert_msg = f"Incident Alert ahead! InfinityCore Quantum Reroute detected ({comp.time_saved_percent}% efficiency gain)."
+        alert_msg = f"Incident Alert ahead! QPath Quantum Reroute detected ({comp.time_saved_percent}% efficiency gain)."
 
         await self.send_json(trip_id, {
             "type": "REROUTE_RECOMMENDATION",

@@ -85,12 +85,12 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
             // App Name & Tagline
             const Text(
-              'InfinityCore',
+              'QPath',
               style: TextStyle(
-                fontSize: 32,
+                fontSize: 38,
                 fontWeight: FontWeight.w900,
                 color: Colors.white,
-                letterSpacing: 1.2,
+                letterSpacing: 2.0,
               ),
             ),
             const SizedBox(height: 6),
@@ -109,11 +109,11 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
               decoration: BoxDecoration(
                 color: AppColors.surfaceElevated,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.white12),
+                border: Border.all(color: AppColors.quantumCyan.withOpacity(0.3)),
               ),
               child: const Text(
-                'Smart India Hackathon 2026 Edition',
-                style: TextStyle(fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.w600),
+                'Adaptive Quantum Route Optimizer',
+                style: TextStyle(fontSize: 11, color: AppColors.quantumCyan, fontWeight: FontWeight.w600),
               ),
             ),
           ],

@@ -1,5 +1,5 @@
-name: infinitycore_mobile
-description: "InfinityCore - Adaptive Quantum-Inspired Traffic Route Optimizer (SIH 2026)"
+name: qpath_mobile
+description: "QPath - Adaptive Quantum-Inspired Traffic Route Optimizer"
 publish_to: 'none'
 version: 1.0.0+1
 

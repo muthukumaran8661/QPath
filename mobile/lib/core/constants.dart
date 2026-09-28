@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class AppConstants {
-  static const String appName = 'InfinityCore';
+  static const String appName = 'QPath';
   static const String appTagline = 'Quantum-Inspired Route Optimizer';
   
   // Default Backend URLs (10.0.2.2 for Android Emulator, localhost for Web/Desktop)

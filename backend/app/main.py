@@ -10,7 +10,7 @@ from app.api.websocket import ws_router
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
-    description="Adaptive Quantum-Inspired Traffic Route Optimizer for Smart India Hackathon 2026",
+    description="Adaptive Quantum-Inspired Traffic Route Optimizer",
     docs_url="/docs",
     redoc_url="/redoc"
 )
