@@ -2,18 +2,17 @@
 document.addEventListener('DOMContentLoaded', () => {
     // 1. Initialize Leaflet Map
     const map = L.map('map', {
-        center: [28.6315, 77.2167], // Connaught Place, New Delhi
-        zoom: 13.5,
+        center: [28.6315, 77.2167], // Default: New Delhi Center
+        zoom: 12,
         zoomControl: false
     });
 
     L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-    // OpenStreetMap CartoDB Dark Matter Tiles (Zero API Keys)
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
-        subdomains: 'abcd',
-        maxZoom: 19
+    // Standard OpenStreetMap Tiles (Zero API Keys Required)
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors'
     }).addTo(map);
 
     // State Variables
@@ -22,6 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let landmarks = [];
     let qpsoPolyline = null;
     let baselinePolyline = null;
+    let alternativePolylines = [];
     let fleetPolylines = [];
     let originMarker = null;
     let destMarker = null;
@@ -31,17 +31,24 @@ document.addEventListener('DOMContentLoaded', () => {
     let wsConnection = null;
     let lastComparisonData = null;
 
+    // Pan-India Coordinates State
+    let originCoords = { lat: 28.6315, lon: 77.2167, label: 'Connaught Place, New Delhi' };
+    let destCoords = { lat: 28.6129, lon: 77.2295, label: 'India Gate, New Delhi' };
+    let emgOriginCoords = { lat: 28.5672, lon: 77.2100, label: 'AIIMS Trauma Center, New Delhi' };
+    let emgDestCoords = { lat: 28.6129, lon: 77.2295, label: 'India Gate, New Delhi' };
+    const geocodeCache = new Map();
+
     // Custom Map Marker Icons
     const originIcon = L.divIcon({
         className: 'custom-marker',
-        html: '<div style="background:#00E676;width:16px;height:16px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 10px #00E676;"></div>',
-        iconSize: [16, 16],
-        iconAnchor: [8, 8]
+        html: '<div style="background:#00E676;width:18px;height:18px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 12px #00E676;cursor:grab;"></div>',
+        iconSize: [18, 18],
+        iconAnchor: [9, 9]
     });
 
     const destIcon = L.divIcon({
         className: 'custom-marker',
-        html: '<div style="background:#00F0FF;width:18px;height:18px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 14px #00F0FF;"></div>',
+        html: '<div style="background:#00F0FF;width:18px;height:18px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 14px #00F0FF;cursor:grab;"></div>',
         iconSize: [18, 18],
         iconAnchor: [9, 9]
     });
@@ -53,50 +60,256 @@ document.addEventListener('DOMContentLoaded', () => {
         iconAnchor: [12, 12]
     });
 
-    // 2. Fetch Landmarks from Backend
-    async function loadLandmarks() {
+    // 2. Geocoding Service (Photon with India Bias & Nominatim Fallback)
+    async function searchPlaces(query) {
+        if (!query || query.trim().length < 2) return [];
+        const cleanQuery = query.trim();
+        const cacheKey = cleanQuery.toLowerCase();
+        if (geocodeCache.has(cacheKey)) {
+            return geocodeCache.get(cacheKey);
+        }
+
+        let results = [];
+        // 1. Try Photon (free, biased to India via center coordinates)
         try {
-            const res = await fetch('/api/landmarks');
-            if (res.ok) {
-                landmarks = await res.json();
-                populateDropdowns();
+            const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(cleanQuery)}&limit=5&lang=en&lat=20.5937&lon=78.9629`;
+            const resp = await fetch(photonUrl);
+            if (resp.ok) {
+                const data = await resp.json();
+                if (data.features && data.features.length > 0) {
+                    results = data.features.map(f => {
+                        const p = f.properties;
+                        const name = p.name || p.city || p.street || cleanQuery;
+                        const areaParts = [p.district, p.city, p.state, p.country].filter(Boolean);
+                        const uniqueArea = [...new Set(areaParts)].filter(part => part !== name).join(', ');
+                        return {
+                            name: name,
+                            area: uniqueArea || 'India',
+                            lat: f.geometry.coordinates[1],
+                            lon: f.geometry.coordinates[0]
+                        };
+                    });
+                }
             }
         } catch (e) {
-            console.error('Error loading landmarks:', e);
+            console.warn('Photon geocoding notice:', e);
         }
+
+        // 2. Fallback to Nominatim if Photon returns no results
+        if (results.length === 0) {
+            try {
+                const nomUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(cleanQuery)}&format=json&limit=5&countrycodes=in&addressdetails=1`;
+                const resp = await fetch(nomUrl, { headers: { 'Accept': 'application/json' } });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    results = data.map(item => ({
+                        name: item.name || item.display_name.split(',')[0],
+                        area: item.display_name.split(',').slice(1, 4).join(',').trim() || 'India',
+                        lat: parseFloat(item.lat),
+                        lon: parseFloat(item.lon)
+                    }));
+                }
+            } catch (e) {
+                console.warn('Nominatim fallback notice:', e);
+            }
+        }
+
+        geocodeCache.set(cacheKey, results);
+        return results;
     }
 
-    function populateDropdowns() {
-        const originSel = document.getElementById('originSelect');
-        const destSel = document.getElementById('destSelect');
-        const depotSel = document.getElementById('fleetDepotSelect');
+    async function reverseGeocode(lat, lon) {
+        const cacheKey = `rev_${lat.toFixed(4)}_${lon.toFixed(4)}`;
+        if (geocodeCache.has(cacheKey)) return geocodeCache.get(cacheKey);
 
-        if (!landmarks || landmarks.length === 0) return;
+        try {
+            const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`;
+            const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
+            if (resp.ok) {
+                const data = await resp.json();
+                const name = data.name || (data.address ? (data.address.suburb || data.address.city || data.address.town || data.address.road) : null) || `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+                geocodeCache.set(cacheKey, name);
+                return name;
+            }
+        } catch (e) {
+            console.warn('Reverse geocode error:', e);
+        }
+        return `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+    }
 
-        originSel.innerHTML = '';
-        destSel.innerHTML = '';
-        depotSel.innerHTML = '';
+    // 3. Autocomplete Setup Helper
+    function setupAutocomplete(inputId, dropdownId, clearBtnId, onSelect) {
+        const input = document.getElementById(inputId);
+        const dropdown = document.getElementById(dropdownId);
+        const clearBtn = clearBtnId ? document.getElementById(clearBtnId) : null;
+        if (!input || !dropdown) return;
 
-        landmarks.forEach((lm, idx) => {
-            const opt1 = new Option(lm.name, lm.id);
-            const opt2 = new Option(lm.name, lm.id);
-            const opt3 = new Option(lm.name, lm.id);
+        let debounceTimer = null;
 
-            originSel.add(opt1);
-            destSel.add(opt2);
-            depotSel.add(opt3);
+        input.addEventListener('input', () => {
+            const val = input.value;
+            if (clearBtn) clearBtn.style.display = val.length > 0 ? 'block' : 'none';
+
+            clearTimeout(debounceTimer);
+            if (val.trim().length < 2) {
+                dropdown.style.display = 'none';
+                dropdown.innerHTML = '';
+                return;
+            }
+
+            debounceTimer = setTimeout(async () => {
+                dropdown.innerHTML = '<div style="padding:8px 10px;font-size:11px;color:#94a3b8;"><i class="fa-solid fa-spinner fa-spin"></i> Searching locations in India...</div>';
+                dropdown.style.display = 'block';
+
+                const suggestions = await searchPlaces(val);
+                if (suggestions.length === 0) {
+                    dropdown.innerHTML = '<div style="padding:8px 10px;font-size:11px;color:#94a3b8;">No locations found. Press enter or click map.</div>';
+                    return;
+                }
+
+                dropdown.innerHTML = '';
+                suggestions.forEach(s => {
+                    const item = document.createElement('div');
+                    item.className = 'suggestion-item';
+                    item.innerHTML = `
+                        <div class="suggestion-title">${s.name}</div>
+                        <div class="suggestion-area">${s.area}</div>
+                    `;
+                    item.addEventListener('click', () => {
+                        input.value = s.name;
+                        dropdown.style.display = 'none';
+                        if (clearBtn) clearBtn.style.display = 'block';
+                        onSelect(s);
+                    });
+                    dropdown.appendChild(item);
+                });
+            }, 300);
         });
 
-        // Set initial selections
-        originSel.value = 'cp_park';
-        destSel.value = 'india_gate';
-        depotSel.value = 'cp_park';
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => {
+                input.value = '';
+                clearBtn.style.display = 'none';
+                dropdown.style.display = 'none';
+                input.focus();
+            });
+        }
 
-        // Auto calculate initial route
-        computePersonalRoute();
+        document.addEventListener('click', (e) => {
+            if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+                dropdown.style.display = 'none';
+            }
+        });
     }
 
-    // 3. Tab Switching
+    // Initialize Autocomplete for Personal Commute
+    setupAutocomplete('originInput', 'originSuggestions', 'btnClearOrigin', (item) => {
+        originCoords = { lat: item.lat, lon: item.lon, label: item.name };
+        computePersonalRoute();
+    });
+
+    setupAutocomplete('destInput', 'destSuggestions', 'btnClearDest', (item) => {
+        destCoords = { lat: item.lat, lon: item.lon, label: item.name };
+        computePersonalRoute();
+    });
+
+    // Initialize Autocomplete for Emergency Panel
+    setupAutocomplete('emgOriginInput', 'emgOriginSuggestions', null, (item) => {
+        emgOriginCoords = { lat: item.lat, lon: item.lon, label: item.name };
+    });
+
+    setupAutocomplete('emgDestInput', 'emgDestSuggestions', null, (item) => {
+        emgDestCoords = { lat: item.lat, lon: item.lon, label: item.name };
+    });
+
+    // "Use My Current Location" (Browser Geolocation)
+    const btnUseLocation = document.getElementById('btnUseCurrentLocation');
+    if (btnUseLocation) {
+        btnUseLocation.addEventListener('click', () => {
+            if (!navigator.geolocation) {
+                alert('Geolocation is not supported by your browser.');
+                return;
+            }
+            btnUseLocation.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Locating...';
+            navigator.geolocation.getCurrentPosition(
+                async (position) => {
+                    const lat = position.coords.latitude;
+                    const lon = position.coords.longitude;
+                    const placeName = await reverseGeocode(lat, lon);
+                    originCoords = { lat, lon, label: placeName };
+                    document.getElementById('originInput').value = placeName;
+                    const clearOrigin = document.getElementById('btnClearOrigin');
+                    if (clearOrigin) clearOrigin.style.display = 'block';
+                    btnUseLocation.innerHTML = '<i class="fa-solid fa-location-crosshairs"></i> My Location';
+                    computePersonalRoute();
+                },
+                (err) => {
+                    console.warn('Geolocation error:', err);
+                    btnUseLocation.innerHTML = '<i class="fa-solid fa-location-crosshairs"></i> My Location';
+                    alert('Unable to retrieve your current location. Please allow location permissions in your browser.');
+                },
+                { enableHighAccuracy: true, timeout: 8000 }
+            );
+        });
+    }
+
+    // Popular Quick-Picks Pills
+    document.querySelectorAll('.quick-pick-pill').forEach(pill => {
+        pill.addEventListener('click', () => {
+            const city = pill.dataset.city;
+            const lat = parseFloat(pill.dataset.lat);
+            const lon = parseFloat(pill.dataset.lon);
+
+            // Set destination to selected quick city
+            destCoords = { lat, lon, label: city };
+            document.getElementById('destInput').value = city;
+            const clearDest = document.getElementById('btnClearDest');
+            if (clearDest) clearDest.style.display = 'block';
+            computePersonalRoute();
+        });
+    });
+
+    // Swap Locations (Origin <-> Destination)
+    document.getElementById('btnSwapLocations')?.addEventListener('click', () => {
+        const originInput = document.getElementById('originInput');
+        const destInput = document.getElementById('destInput');
+
+        // Swap coordinates
+        const tempCoords = { ...originCoords };
+        originCoords = { ...destCoords };
+        destCoords = tempCoords;
+
+        // Swap input text
+        const tempVal = originInput.value;
+        originInput.value = destInput.value;
+        destInput.value = tempVal;
+
+        computePersonalRoute();
+    });
+
+    // Interactive Map Click Handler: Set Origin or Destination
+    map.on('click', async (e) => {
+        const lat = e.latlng.lat;
+        const lon = e.latlng.lng;
+        const placeName = await reverseGeocode(lat, lon);
+
+        // Calculate distance to current origin and dest
+        const distToOrigin = Math.hypot(lat - originCoords.lat, lon - originCoords.lon);
+        const distToDest = Math.hypot(lat - destCoords.lat, lon - destCoords.lon);
+
+        if (distToOrigin < distToDest) {
+            // Closer to origin -> update origin
+            originCoords = { lat, lon, label: placeName };
+            document.getElementById('originInput').value = placeName;
+        } else {
+            // Closer to dest -> update dest
+            destCoords = { lat, lon, label: placeName };
+            document.getElementById('destInput').value = placeName;
+        }
+        computePersonalRoute();
+    });
+
+    // 4. Tab Switching
     const tabs = document.querySelectorAll('.tab-btn');
     tabs.forEach(tab => {
         tab.addEventListener('click', () => {
@@ -127,7 +340,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-
     // Priority Pills
     const prioPills = document.querySelectorAll('.prio-pill');
     prioPills.forEach(pill => {
@@ -139,26 +351,22 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // 4. Calculate Personal Quantum Route
+    // 5. Calculate Pan-India Quantum Route
     async function computePersonalRoute() {
-        const originId = document.getElementById('originSelect').value;
-        const destId = document.getElementById('destSelect').value;
-
-        const originLm = landmarks.find(l => l.id === originId) || { lat: 28.6315, lon: 77.2167, node_id: 0 };
-        const destLm = landmarks.find(l => l.id === destId) || { lat: 28.6129, lon: 77.2295, node_id: 25 };
+        if (!originCoords || !destCoords) return;
 
         currentTripId = `trip_${Date.now()}`;
 
         const payload = {
-            source: { lat: originLm.lat, lon: originLm.lon, node_id: originLm.node_id, label: originLm.name },
-            destination: { lat: destLm.lat, lon: destLm.lon, node_id: destLm.node_id, label: destLm.name },
+            origin: { lat: originCoords.lat, lon: originCoords.lon, label: originCoords.label },
+            destination: { lat: destCoords.lat, lon: destCoords.lon, label: destCoords.label },
             mode: currentMode === 'emergency' ? 'emergency' : 'personal',
             priority: currentPriority,
             trip_id: currentTripId
         };
 
         const btn = document.getElementById('btnComputeRoute');
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> OPTIMIZING QUANTUM STATE...';
+        if (btn) btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> OPTIMIZING QUANTUM ROUTE...';
 
         try {
             const res = await fetch('/api/route', {
@@ -170,11 +378,14 @@ document.addEventListener('DOMContentLoaded', () => {
             if (res.ok) {
                 const data = await res.json();
                 renderRouteComparison(data.comparison);
+            } else {
+                const errData = await res.json();
+                alert(errData.detail || 'Routing failed. Please choose different locations.');
             }
         } catch (e) {
             console.error('Route calculation failed:', e);
         } finally {
-            btn.innerHTML = '<i class="fa-solid fa-atom"></i> RUN QUANTUM ROUTE OPTIMIZATION';
+            if (btn) btn.innerHTML = '<i class="fa-solid fa-atom"></i> RUN QUANTUM ROUTE OPTIMIZATION';
         }
     }
 
@@ -184,14 +395,29 @@ document.addEventListener('DOMContentLoaded', () => {
         // Clear existing polylines & markers
         if (qpsoPolyline) map.removeLayer(qpsoPolyline);
         if (baselinePolyline) map.removeLayer(baselinePolyline);
+        alternativePolylines.forEach(p => map.removeLayer(p));
+        alternativePolylines = [];
         if (originMarker) map.removeLayer(originMarker);
         if (destMarker) map.removeLayer(destMarker);
         clearFleetLayers();
 
         const qpsoCoords = comp.qpso_route.coordinates;
         const baseCoords = comp.baseline_route.coordinates;
+        const alternatives = comp.alternative_routes || [];
 
-        // Draw Standard Baseline (Dotted Gray)
+        // 1. Draw Alternative Candidate Routes in faint slate grey
+        alternatives.forEach(alt => {
+            if (alt.coordinates && alt.coordinates.length > 0) {
+                const poly = L.polyline(alt.coordinates, {
+                    color: '#475569',
+                    weight: 4,
+                    opacity: 0.45
+                }).addTo(map);
+                alternativePolylines.push(poly);
+            }
+        });
+
+        // 2. Draw Standard Baseline Route (Dotted Slate Gray)
         if (baseCoords && baseCoords.length > 0) {
             baselinePolyline = L.polyline(baseCoords, {
                 color: '#64748B',
@@ -201,7 +427,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }).addTo(map);
         }
 
-        // Draw QPSO Quantum Route (Glowing Neon Cyan or Emergency Red)
+        // 3. Draw QPSO Quantum Route (Glowing Neon Cyan or Emergency Red)
         const lineColor = currentMode === 'emergency' ? '#FF385C' : '#00F0FF';
         if (qpsoCoords && qpsoCoords.length > 0) {
             qpsoPolyline = L.polyline(qpsoCoords, {
@@ -210,30 +436,60 @@ document.addEventListener('DOMContentLoaded', () => {
                 opacity: 0.95
             }).addTo(map);
 
-            // Fit map bounds to show route
+            // Auto-zoom map bounds to fit route
             map.fitBounds(qpsoPolyline.getBounds(), { padding: [40, 40] });
 
-            // Place origin and destination markers
-            originMarker = L.marker(qpsoCoords[0], { icon: originIcon }).addTo(map).bindPopup('<b>Origin</b>');
-            destMarker = L.marker(qpsoCoords[qpsoCoords.length - 1], { icon: destIcon }).addTo(map).bindPopup('<b>Destination</b>');
+            // Place draggable Origin and Destination markers
+            const startPt = qpsoCoords[0];
+            const endPt = qpsoCoords[qpsoCoords.length - 1];
+
+            originMarker = L.marker(startPt, { icon: originIcon, draggable: true }).addTo(map)
+                .bindPopup(`<b>Origin:</b> ${originCoords.label || 'Origin'}<br><small>Drag marker to adjust</small>`);
+
+            destMarker = L.marker(endPt, { icon: destIcon, draggable: true }).addTo(map)
+                .bindPopup(`<b>Destination:</b> ${destCoords.label || 'Destination'}<br><small>Drag marker to adjust</small>`);
+
+            // Marker Drag Events
+            originMarker.on('dragend', async (e) => {
+                const pos = e.target.getLatLng();
+                originCoords.lat = pos.lat;
+                originCoords.lon = pos.lng;
+                const name = await reverseGeocode(pos.lat, pos.lng);
+                originCoords.label = name;
+                document.getElementById('originInput').value = name;
+                computePersonalRoute();
+            });
+
+            destMarker.on('dragend', async (e) => {
+                const pos = e.target.getLatLng();
+                destCoords.lat = pos.lat;
+                destCoords.lon = pos.lng;
+                const name = await reverseGeocode(pos.lat, pos.lng);
+                destCoords.label = name;
+                document.getElementById('destInput').value = name;
+                computePersonalRoute();
+            });
         }
 
-        // Update UI Card
-        document.getElementById('comparisonCard').style.display = 'flex';
-        document.getElementById('qpsoTime').textContent = comp.qpso_route.metrics.total_time_formatted;
-        document.getElementById('qpsoDist').textContent = `(${comp.qpso_route.metrics.total_distance_formatted})`;
-        document.getElementById('efficiencyScore').textContent = `${Math.round(comp.quantum_efficiency_score)}% Efficient`;
-        document.getElementById('timeSavedBadge').textContent = comp.time_saved_seconds > 0 
-            ? `-${(comp.time_saved_seconds / 60).toFixed(1)} min faster` 
-            : 'Optimal Baseline';
+        // Update UI Comparison Metrics Card
+        const compCard = document.getElementById('comparisonCard');
+        if (compCard) {
+            compCard.style.display = 'flex';
+            document.getElementById('qpsoTime').textContent = comp.qpso_route.metrics.total_time_formatted;
+            document.getElementById('qpsoDist').textContent = `(${comp.qpso_route.metrics.total_distance_formatted})`;
+            document.getElementById('efficiencyScore').textContent = `${Math.round(comp.quantum_efficiency_score)}% Score`;
+            document.getElementById('timeSavedBadge').textContent = comp.time_saved_seconds > 0 
+                ? `-${(comp.time_saved_seconds / 60).toFixed(1)} min faster` 
+                : 'Optimal Multi-Objective';
 
-        document.getElementById('metricCongAvoid').textContent = `${Math.round(comp.congestion_reduction_percent)}%`;
-        document.getElementById('metricSmoothness').textContent = `${Math.round(comp.qpso_route.metrics.avg_road_condition_score * 100)}%`;
-        document.getElementById('metricCarbon').textContent = `${comp.qpso_route.metrics.carbon_emission_kg} kg`;
+            document.getElementById('metricCongAvoid').textContent = `${Math.round(comp.congestion_reduction_percent)}%`;
+            document.getElementById('metricSmoothness').textContent = `${Math.round(comp.qpso_route.metrics.avg_road_condition_score * 100)}%`;
+            document.getElementById('metricCarbon').textContent = `${comp.qpso_route.metrics.carbon_emission_kg} kg`;
+        }
     }
 
-    // 5. Live Navigation & WebSocket Stream
-    document.getElementById('btnStartNav').addEventListener('click', () => {
+    // 6. Live Navigation & WebSocket Stream
+    document.getElementById('btnStartNav')?.addEventListener('click', () => {
         if (!lastComparisonData) return;
 
         document.getElementById('comparisonCard').style.display = 'none';
@@ -245,7 +501,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // Initialize WebSocket connection for live reroute alerts
         initWebSocket(currentTripId);
 
-        // Start vehicle movement simulation along coordinates
         let coordIdx = 0;
         if (navVehicleMarker) map.removeLayer(navVehicleMarker);
         navVehicleMarker = L.marker(coords[0], { icon: vehicleIcon }).addTo(map);
@@ -261,7 +516,6 @@ document.addEventListener('DOMContentLoaded', () => {
             navVehicleMarker.setLatLng(currentPos);
             map.panTo(currentPos);
 
-            // Update Speed & Instruction
             const segments = lastComparisonData.qpso_route.segments || [];
             const segIdx = Math.min(Math.floor((coordIdx / coords.length) * segments.length), segments.length - 1);
             if (segments[segIdx]) {
@@ -273,7 +527,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 1500);
     });
 
-    document.getElementById('btnStopNav').addEventListener('click', () => {
+    document.getElementById('btnStopNav')?.addEventListener('click', () => {
         clearInterval(navInterval);
         if (navVehicleMarker) map.removeLayer(navVehicleMarker);
         if (wsConnection) wsConnection.close();
@@ -293,15 +547,10 @@ document.addEventListener('DOMContentLoaded', () => {
             wsConnection = new WebSocket(wsUrl);
 
             wsConnection.onopen = () => {
-                const originId = document.getElementById('originSelect').value;
-                const destId = document.getElementById('destSelect').value;
-                const originLm = landmarks.find(l => l.id === originId) || { lat: 28.6315, lon: 77.2167 };
-                const destLm = landmarks.find(l => l.id === destId) || { lat: 28.6129, lon: 77.2295 };
-
                 wsConnection.send(JSON.stringify({
                     action: 'START_TRIP',
-                    source: { lat: originLm.lat, lon: originLm.lon },
-                    destination: { lat: destLm.lat, lon: destLm.lon },
+                    source: { lat: originCoords.lat, lon: originCoords.lon },
+                    destination: { lat: destCoords.lat, lon: destCoords.lon },
                     priority: currentPriority,
                     mode: currentMode
                 }));
@@ -335,7 +584,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
 
-    // 6. Fleet Logistics VRP Mode
+    // 7. Fleet Logistics VRP Mode
     let demoStops = [
         { lat: 28.6129, lon: 77.2295, label: 'India Gate Plaza' },
         { lat: 28.6429, lon: 77.2195, label: 'NDLS Freight Hub' },
@@ -346,6 +595,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderStopsList() {
         const container = document.getElementById('stopsListContainer');
+        if (!container) return;
         container.innerHTML = '';
         document.getElementById('stopCount').textContent = demoStops.length;
 
@@ -366,7 +616,7 @@ document.addEventListener('DOMContentLoaded', () => {
         solveFleetRoute();
     };
 
-    document.getElementById('btnAddDemoStop').addEventListener('click', () => {
+    document.getElementById('btnAddDemoStop')?.addEventListener('click', () => {
         const extraStops = [
             { lat: 28.5850, lon: 77.1650, label: 'Tech City Corridor' },
             { lat: 28.5562, lon: 77.1000, label: 'Airport Express Hub' },
@@ -393,6 +643,7 @@ document.addEventListener('DOMContentLoaded', () => {
         clearFleetLayers();
         if (qpsoPolyline) map.removeLayer(qpsoPolyline);
         if (baselinePolyline) map.removeLayer(baselinePolyline);
+        alternativePolylines.forEach(p => map.removeLayer(p));
 
         const colors = ['#00F0FF', '#7928CA', '#FF007F', '#00E676'];
         const vehicles = [];
@@ -412,7 +663,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         const btn = document.getElementById('btnSolveFleet');
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> PARTITIONING VEHICLE TOURS...';
+        if (btn) btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> PARTITIONING VEHICLE TOURS...';
 
         try {
             const res = await fetch('/api/fleet/route', {
@@ -428,7 +679,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) {
             console.error('Fleet route failed:', e);
         } finally {
-            btn.innerHTML = '<i class="fa-solid fa-microchip"></i> SOLVE QUANTUM FLEET VRP';
+            if (btn) btn.innerHTML = '<i class="fa-solid fa-microchip"></i> SOLVE QUANTUM FLEET VRP';
         }
     }
 
@@ -456,7 +707,6 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
             toursList.appendChild(card);
 
-            // Draw polyline on map
             if (vr.path.coordinates && vr.path.coordinates.length > 0) {
                 const poly = L.polyline(vr.path.coordinates, {
                     color: vr.color,
@@ -478,19 +728,21 @@ document.addEventListener('DOMContentLoaded', () => {
         fleetPolylines = [];
     }
 
-    // 7. What-If Scenario Simulator Mode
+    // 8. What-If Scenario Simulator Mode
     const simSlider = document.getElementById('simTimeSlider');
-    simSlider.addEventListener('input', (e) => {
-        const val = parseFloat(e.target.value);
-        const hour = Math.floor(val);
-        const min = (val - hour) * 60;
-        const period = hour >= 12 ? 'PM' : 'AM';
-        const displayH = hour > 12 ? hour - 12 : (hour === 0 ? 12 : hour);
-        const isRush = (val >= 8 && val <= 10.5) || (val >= 17 && val <= 20);
+    if (simSlider) {
+        simSlider.addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            const hour = Math.floor(val);
+            const min = (val - hour) * 60;
+            const period = hour >= 12 ? 'PM' : 'AM';
+            const displayH = hour > 12 ? hour - 12 : (hour === 0 ? 12 : hour);
+            const isRush = (val >= 8 && val <= 10.5) || (val >= 17 && val <= 20);
 
-        document.getElementById('simTimeDisplay').textContent = 
-            `${String(displayH).padStart(2, '0')}:${String(min).padStart(2, '0')} ${period} (${isRush ? '🔴 PEAK RUSH' : '🟢 NORMAL FLOW'})`;
-    });
+            document.getElementById('simTimeDisplay').textContent = 
+                `${String(displayH).padStart(2, '0')}:${String(min).padStart(2, '0')} ${period} (${isRush ? '🔴 PEAK RUSH' : '🟢 NORMAL FLOW'})`;
+        });
+    }
 
     let selectedWeather = 'rain_monsoon';
     document.querySelectorAll('.weather-pill').forEach(wp => {
@@ -501,13 +753,13 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    document.getElementById('btnRunSimulation').addEventListener('click', async () => {
+    document.getElementById('btnRunSimulation')?.addEventListener('click', async () => {
         const payload = {
             scenario_name: document.getElementById('simPresetSelect').options[document.getElementById('simPresetSelect').selectedIndex].text,
             time_of_day_hours: parseFloat(simSlider.value),
             weather: selectedWeather,
-            source: { lat: 28.6315, lon: 77.2167 },
-            destination: { lat: 28.5850, lon: 77.1650 },
+            source: { lat: originCoords.lat, lon: originCoords.lon },
+            destination: { lat: destCoords.lat, lon: destCoords.lon },
             inject_closures: 1,
             inject_accidents: 1
         };
@@ -529,7 +781,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('simStdTime').textContent = data.stressed_route_standard.metrics.total_time_formatted;
                 document.getElementById('simQpsoTime').textContent = data.stressed_route_qpso.metrics.total_time_formatted;
 
-                // Render stressed comparison on map
                 renderRouteComparison({
                     qpso_route: data.stressed_route_qpso,
                     baseline_route: data.stressed_route_standard,
@@ -546,12 +797,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // 8. SIH Judge Demo Modal Controls
+    // 9. Incident Console Modal Controls
     const judgeModal = document.getElementById('judgeModal');
-    document.getElementById('btnJudgeConsole').addEventListener('click', () => {
+    document.getElementById('btnJudgeConsole')?.addEventListener('click', () => {
         judgeModal.style.display = 'flex';
     });
-    document.getElementById('btnCloseJudgeModal').addEventListener('click', () => {
+    document.getElementById('btnCloseJudgeModal')?.addEventListener('click', () => {
         judgeModal.style.display = 'none';
     });
 
@@ -563,8 +814,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     incident_type: type,
-                    lat: 28.6250,
-                    lon: 77.2250,
+                    lat: originCoords.lat + 0.005,
+                    lon: originCoords.lon + 0.005,
                     radius_meters: 350,
                     severity: 3.8,
                     description: desc
@@ -578,37 +829,28 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    document.getElementById('btnInjectAccident').addEventListener('click', () => {
+    document.getElementById('btnInjectAccident')?.addEventListener('click', () => {
         injectDemoIncident('accident', '5-Car Pileup on Janpath Arterial');
     });
-    document.getElementById('btnInjectClosure').addEventListener('click', () => {
+    document.getElementById('btnInjectClosure')?.addEventListener('click', () => {
         injectDemoIncident('closure', 'Emergency Flyover Structural Closure');
     });
-    document.getElementById('btnInjectWaterlogging').addEventListener('click', () => {
+    document.getElementById('btnInjectWaterlogging')?.addEventListener('click', () => {
         injectDemoIncident('pothole_hazard', 'Severe Monsoon Waterlogging & Potholes');
     });
-    document.getElementById('btnInjectCongestion').addEventListener('click', () => {
+    document.getElementById('btnInjectCongestion')?.addEventListener('click', () => {
         injectDemoIncident('congestion', '3.5x Heavy Traffic Wave Surge');
     });
 
-    document.getElementById('btnResetGraph').addEventListener('click', async () => {
+    document.getElementById('btnResetGraph')?.addEventListener('click', async () => {
         judgeModal.style.display = 'none';
         await fetch('/api/reset', { method: 'POST' });
         computePersonalRoute();
     });
 
-    document.getElementById('btnSwapLocations').addEventListener('click', () => {
-        const originSel = document.getElementById('originSelect');
-        const destSel = document.getElementById('destSelect');
-        const temp = originSel.value;
-        originSel.value = destSel.value;
-        destSel.value = temp;
-        computePersonalRoute();
-    });
+    document.getElementById('btnComputeRoute')?.addEventListener('click', computePersonalRoute);
 
-    document.getElementById('btnComputeRoute').addEventListener('click', computePersonalRoute);
-
-    // 9. Emergency Green Corridor Logic
+    // 10. Emergency Green Corridor Logic
     let emgVehicleType = 'ambulance';
     document.querySelectorAll('.emg-type-pill').forEach(pill => {
         pill.addEventListener('click', () => {
@@ -619,26 +861,25 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     document.getElementById('btnSwapEmg')?.addEventListener('click', () => {
-        const o = document.getElementById('emgOriginSelect');
-        const d = document.getElementById('emgDestSelect');
-        const temp = o.value;
-        o.value = d.value;
-        d.value = temp;
+        const oInput = document.getElementById('emgOriginInput');
+        const dInput = document.getElementById('emgDestInput');
+        const tempCoords = { ...emgOriginCoords };
+        emgOriginCoords = { ...emgDestCoords };
+        emgDestCoords = tempCoords;
+
+        const tempVal = oInput.value;
+        oInput.value = dInput.value;
+        dInput.value = tempVal;
     });
 
     document.getElementById('btnComputeEmg')?.addEventListener('click', async () => {
-        const originId = document.getElementById('emgOriginSelect').value;
-        const destId = document.getElementById('emgDestSelect').value;
-        const originLm = landmarks.find(l => l.id === originId) || { lat: 28.5915, lon: 77.2080, node_id: 18 };
-        const destLm = landmarks.find(l => l.id === destId) || { lat: 28.6129, lon: 77.2295, node_id: 25 };
-
         const btn = document.getElementById('btnComputeEmg');
         btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> COMPUTING EMERGENCY CORRIDOR...';
         btn.style.background = 'rgba(255,56,92,0.4)';
 
         const payload = {
-            source: { lat: originLm.lat, lon: originLm.lon, node_id: originLm.node_id, label: originLm.name || originId },
-            destination: { lat: destLm.lat, lon: destLm.lon, node_id: destLm.node_id, label: destLm.name || destId },
+            origin: { lat: emgOriginCoords.lat, lon: emgOriginCoords.lon, label: emgOriginCoords.label },
+            destination: { lat: emgDestCoords.lat, lon: emgDestCoords.lon, label: emgDestCoords.label },
             mode: 'emergency',
             priority: 'fastest',
             trip_id: `emg_${Date.now()}`
@@ -655,14 +896,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 const data = await res.json();
                 const comp = data.comparison;
 
-                // Draw emergency route on map (bright red)
+                // Draw emergency route on map (bright pulsing red)
                 if (qpsoPolyline) map.removeLayer(qpsoPolyline);
                 if (baselinePolyline) map.removeLayer(baselinePolyline);
+                alternativePolylines.forEach(p => map.removeLayer(p));
                 clearFleetLayers();
 
                 const coords = comp.qpso_route.coordinates;
                 if (coords && coords.length > 0) {
-                    // Pulsing red emergency corridor
                     qpsoPolyline = L.polyline(coords, {
                         color: '#FF385C',
                         weight: 7,
@@ -676,7 +917,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     destMarker = L.marker(coords[coords.length - 1], { icon: destIcon }).addTo(map).bindPopup('<b>Incident Location</b>');
                 }
 
-                // Update EMG card
                 document.getElementById('emgComparisonCard').style.display = 'flex';
                 document.getElementById('emgTime').textContent = comp.qpso_route.metrics.total_time_formatted;
                 document.getElementById('emgDist').textContent = `(${comp.qpso_route.metrics.total_distance_formatted})`;
@@ -684,7 +924,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const saved = comp.time_saved_seconds > 0 ? `-${(comp.time_saved_seconds / 60).toFixed(1)} min faster` : 'Optimal Corridor';
                 document.getElementById('emgSavedBadge').textContent = saved;
                 document.getElementById('emgSignals').textContent = Math.floor(3 + Math.random() * 4);
-                document.getElementById('emgCleared').textContent = `${(comp.qpso_route.metrics.total_distance_km * 0.3).toFixed(1)} km`;
+                document.getElementById('emgCleared').textContent = `${(comp.qpso_route.metrics.total_distance_meters / 1000.0 * 0.4).toFixed(1)} km`;
                 document.getElementById('emgETA').textContent = comp.qpso_route.metrics.total_time_formatted;
             }
         } catch (e) {
@@ -695,6 +935,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Initial Load
-    loadLandmarks();
+    // Initial Load: Compute route between default locations (CP to India Gate)
+    computePersonalRoute();
 });

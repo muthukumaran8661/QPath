@@ -1,5 +1,5 @@
-from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
+from pydantic import BaseModel, Field, model_validator
+from typing import List, Optional, Dict, Any, Union
 from enum import Enum
 import time
 
@@ -46,18 +46,33 @@ class ObjectiveWeights(BaseModel):
 
 class Coordinate(BaseModel):
     lat: float
-    lon: float
+    lon: Optional[float] = None
+    lng: Optional[float] = None
     label: Optional[str] = None
     node_id: Optional[int] = None
 
+    @model_validator(mode="before")
+    @classmethod
+    def check_coordinates(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if "lng" in data and "lon" not in data:
+                data["lon"] = data["lng"]
+            elif "lon" in data and "lng" not in data:
+                data["lng"] = data["lon"]
+        return data
+
+    @property
+    def longitude(self) -> float:
+        return self.lon if self.lon is not None else (self.lng or 0.0)
+
 class RouteSegment(BaseModel):
-    u: int
-    v: int
+    u: int = 0
+    v: int = 0
     distance_meters: float
     travel_time_seconds: float
-    speed_kph: float
-    congestion_factor: float
-    road_condition: float
+    speed_kph: float = 40.0
+    congestion_factor: float = 1.0
+    road_condition: float = 0.9
     is_closed: bool = False
     coordinates: List[List[float]] = []  # [[lat, lon], ...]
     instruction: Optional[str] = None
@@ -74,14 +89,15 @@ class RouteMetrics(BaseModel):
     multi_objective_cost: float
 
 class PathResult(BaseModel):
-    nodes: List[int]
+    nodes: List[int] = []
     coordinates: List[List[float]]  # [[lat, lon], ...]
-    segments: List[RouteSegment]
+    segments: List[RouteSegment] = []
     metrics: RouteMetrics
 
 class RouteComparison(BaseModel):
     qpso_route: PathResult
     baseline_route: PathResult
+    alternative_routes: List[PathResult] = []
     time_saved_seconds: float
     time_saved_percent: float
     congestion_reduction_percent: float
@@ -90,7 +106,8 @@ class RouteComparison(BaseModel):
     algorithm_summary: Dict[str, Any]
 
 class RouteRequest(BaseModel):
-    source: Coordinate
+    source: Optional[Coordinate] = None
+    origin: Optional[Coordinate] = None
     destination: Coordinate
     mode: OptimizationMode = OptimizationMode.PERSONAL
     priority: PriorityPreset = PriorityPreset.BALANCED
@@ -98,6 +115,30 @@ class RouteRequest(BaseModel):
     trip_id: Optional[str] = None
     swarm_size: int = 35
     max_iterations: int = 45
+
+    @model_validator(mode="before")
+    @classmethod
+    def check_origin_source(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            # Map origin to source if source missing
+            if "origin" in data and "source" not in data:
+                data["source"] = data["origin"]
+            elif "source" in data and "origin" not in data:
+                data["origin"] = data["source"]
+            # Handle string priority like "Smooth Road", "Fastest", etc.
+            if "priority" in data and isinstance(data["priority"], str):
+                p_str = data["priority"].strip().lower().replace(" ", "_")
+                if "smooth" in p_str:
+                    data["priority"] = PriorityPreset.SMOOTH_ROADS
+                elif "fast" in p_str:
+                    data["priority"] = PriorityPreset.FASTEST
+                elif "short" in p_str:
+                    data["priority"] = PriorityPreset.SHORTEST
+                elif "congest" in p_str:
+                    data["priority"] = PriorityPreset.LESS_CONGESTED
+                else:
+                    data["priority"] = PriorityPreset.BALANCED
+        return data
 
 class RouteResponse(BaseModel):
     trip_id: str

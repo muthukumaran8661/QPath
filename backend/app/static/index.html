@@ -68,41 +68,56 @@
                 <section class="panel-section active" id="personalPanel">
                     <div class="panel-header">
                         <h2><i class="fa-solid fa-route"></i> Quantum Route Planner</h2>
-                        <span class="hub-pill"><i class="fa-solid fa-city"></i> New Delhi Hub</span>
+                        <span class="hub-pill"><i class="fa-solid fa-globe"></i> Pan-India OSRM</span>
                     </div>
 
-                    <!-- Origin & Destination -->
+                    <!-- Origin & Destination Search -->
                     <div class="input-card">
                         <div class="field-group">
-                            <label><i class="fa-solid fa-circle-dot icon-origin"></i> Origin Location</label>
-                            <select id="originSelect" class="form-select">
-                                <option value="0">Connaught Place Central Hub (Node 0)</option>
-                                <option value="ndls_station">New Delhi Central Railway Station</option>
-                                <option value="india_gate">India Gate Boulevard</option>
-                                <option value="aiims_hospital">AIIMS Apex Trauma Center</option>
-                                <option value="cyber_tech_park">Quantum Tech City & IT Park</option>
-                                <option value="aerocity_hub">Indira Gandhi Airport Express</option>
-                                <option value="karol_bagh">Karol Bagh Commercial Hub</option>
-                            </select>
+                            <div class="field-label-row">
+                                <label for="originInput"><i class="fa-solid fa-circle-dot icon-origin"></i> Origin Location</label>
+                                <button class="btn-location-gps" id="btnUseCurrentLocation" type="button" title="Use my current GPS location">
+                                    <i class="fa-solid fa-location-crosshairs"></i> My Location
+                                </button>
+                            </div>
+                            <div class="search-input-wrapper">
+                                <input type="text" id="originInput" class="form-input search-input" placeholder="Search city/area (e.g. Madurai)..." autocomplete="off" value="Connaught Place, New Delhi">
+                                <button class="btn-clear-input" id="btnClearOrigin" type="button" title="Clear">&times;</button>
+                                <div class="autocomplete-dropdown" id="originSuggestions" style="display: none;"></div>
+                            </div>
                         </div>
 
                         <div class="swap-divider">
-                            <button class="btn-icon-swap" id="btnSwapLocations" title="Swap Origin & Destination">
+                            <button class="btn-icon-swap" id="btnSwapLocations" type="button" title="Swap Origin & Destination">
                                 <i class="fa-solid fa-arrow-right-arrow-left fa-rotate-90"></i>
                             </button>
                         </div>
 
                         <div class="field-group">
-                            <label><i class="fa-solid fa-location-dot icon-dest"></i> Destination Location</label>
-                            <select id="destSelect" class="form-select">
-                                <option value="india_gate" selected>India Gate Boulevard</option>
-                                <option value="0">Connaught Place Central Hub</option>
-                                <option value="ndls_station">New Delhi Central Railway Station</option>
-                                <option value="pragati_maidan">Bharat Mandapam (Pragati Maidan)</option>
-                                <option value="aiims_hospital">AIIMS Apex Trauma Center</option>
-                                <option value="cyber_tech_park">Quantum Tech City & IT Park</option>
-                                <option value="aerocity_hub">Indira Gandhi Airport Express</option>
-                            </select>
+                            <label for="destInput"><i class="fa-solid fa-location-dot icon-dest"></i> Destination Location</label>
+                            <div class="search-input-wrapper">
+                                <input type="text" id="destInput" class="form-input search-input" placeholder="Search destination (e.g. Chennai)..." autocomplete="off" value="India Gate, New Delhi">
+                                <button class="btn-clear-input" id="btnClearDest" type="button" title="Clear">&times;</button>
+                                <div class="autocomplete-dropdown" id="destSuggestions" style="display: none;"></div>
+                            </div>
+                        </div>
+
+                        <!-- Popular Places Quick-Picks -->
+                        <div class="quick-picks-section">
+                            <div class="quick-picks-label"><i class="fa-solid fa-bolt text-cyan"></i> Quick Cities:</div>
+                            <div class="quick-picks-pills">
+                                <button type="button" class="quick-pick-pill" data-city="Madurai" data-lat="9.9252" data-lon="78.1198">Madurai</button>
+                                <button type="button" class="quick-pick-pill" data-city="Chennai" data-lat="13.0827" data-lon="80.2707">Chennai</button>
+                                <button type="button" class="quick-pick-pill" data-city="Delhi" data-lat="28.6139" data-lon="77.2090">Delhi</button>
+                                <button type="button" class="quick-pick-pill" data-city="Bengaluru" data-lat="12.9716" data-lon="77.5946">Bengaluru</button>
+                                <button type="button" class="quick-pick-pill" data-city="Mumbai" data-lat="19.0760" data-lon="72.8777">Mumbai</button>
+                                <button type="button" class="quick-pick-pill" data-city="Hyderabad" data-lat="17.3850" data-lon="78.4867">Hyderabad</button>
+                            </div>
+                        </div>
+
+                        <div class="map-action-tip">
+                            <i class="fa-solid fa-hand-pointer text-cyan"></i>
+                            <span>Tip: Click map or drag markers to set points</span>
                         </div>
                     </div>
 
@@ -352,26 +367,23 @@
 
                     <div class="input-card">
                         <div class="field-group">
-                            <label><i class="fa-solid fa-circle-dot icon-origin"></i> Dispatch From</label>
-                            <select id="emgOriginSelect" class="form-select">
-                                <option value="aiims_hospital">AIIMS Apex Trauma Center</option>
-                                <option value="0">Connaught Place Central Hub</option>
-                                <option value="ndls_station">New Delhi Central Railway Station</option>
-                            </select>
+                            <label for="emgOriginInput"><i class="fa-solid fa-circle-dot icon-origin"></i> Dispatch From</label>
+                            <div class="search-input-wrapper">
+                                <input type="text" id="emgOriginInput" class="form-input search-input" placeholder="Search dispatch location..." autocomplete="off" value="AIIMS Trauma Center, New Delhi">
+                                <div class="autocomplete-dropdown" id="emgOriginSuggestions" style="display: none;"></div>
+                            </div>
                         </div>
                         <div class="swap-divider">
-                            <button class="btn-icon-swap" id="btnSwapEmg" title="Swap Origin &amp; Destination">
+                            <button class="btn-icon-swap" id="btnSwapEmg" type="button" title="Swap Origin &amp; Destination">
                                 <i class="fa-solid fa-arrow-right-arrow-left fa-rotate-90"></i>
                             </button>
                         </div>
                         <div class="field-group">
-                            <label><i class="fa-solid fa-location-dot icon-dest"></i> Incident / Destination</label>
-                            <select id="emgDestSelect" class="form-select">
-                                <option value="india_gate">India Gate Boulevard</option>
-                                <option value="pragati_maidan">Bharat Mandapam (Pragati Maidan)</option>
-                                <option value="cyber_tech_park">Quantum Tech City &amp; IT Park</option>
-                                <option value="aerocity_hub">Indira Gandhi Airport Express</option>
-                            </select>
+                            <label for="emgDestInput"><i class="fa-solid fa-location-dot icon-dest"></i> Incident / Destination</label>
+                            <div class="search-input-wrapper">
+                                <input type="text" id="emgDestInput" class="form-input search-input" placeholder="Search incident location..." autocomplete="off" value="India Gate, New Delhi">
+                                <div class="autocomplete-dropdown" id="emgDestSuggestions" style="display: none;"></div>
+                            </div>
                         </div>
                     </div>
 

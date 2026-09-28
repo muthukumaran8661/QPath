@@ -7,8 +7,9 @@ from app.models.schemas import (
     SimulationScenarioRequest, SimulationScenarioResponse,
     IncidentCreate, Incident, MapLandmark
 )
-from app.optimizer.graph_service import graph_service
+from app.optimizer.graph_service import graph_service, haversine_meters
 from app.optimizer.qpso import qpso_optimizer
+from app.optimizer.pan_india_router import pan_india_router
 from app.optimizer.vrp import FleetVRPOptimizer
 from app.simulator.traffic_simulator import TrafficSimulator
 
@@ -19,16 +20,53 @@ traffic_simulator = TrafficSimulator(graph_service, qpso_optimizer)
 
 @router.post("/route", response_model=RouteResponse, summary="Compute Quantum Multi-Objective Route")
 async def compute_route(request: RouteRequest):
+    src = request.source or request.origin
+    dst = request.destination
+    if not src or not dst:
+        raise HTTPException(status_code=400, detail="Both origin/source and destination are required.")
+
+    # Validation: Same location check
+    src_lon = src.longitude
+    dst_lon = dst.longitude
+    dist_m = haversine_meters(src.lat, src_lon, dst.lat, dst_lon)
+    if dist_m < 50.0:
+        raise HTTPException(
+            status_code=400,
+            detail="Origin and destination cannot be the same location. Please choose distinct locations."
+        )
+
     trip_id = request.trip_id or f"trip_{uuid.uuid4().hex[:8]}"
-    comparison = qpso_optimizer.compute_route_comparison(
-        source=request.source,
-        destination=request.destination,
-        mode=request.mode,
-        priority=request.priority,
-        custom_weights=request.custom_weights,
-        swarm_size=request.swarm_size,
-        max_iter=request.max_iterations
-    )
+
+    try:
+        comparison = pan_india_router.route(
+            source=src,
+            destination=dst,
+            mode=request.mode,
+            priority=request.priority,
+            custom_weights=request.custom_weights,
+            swarm_size=request.swarm_size,
+            max_iter=request.max_iterations
+        )
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        # Fallback to internal synthetic graph optimizer if external routing encounters error
+        try:
+            comparison = qpso_optimizer.compute_route_comparison(
+                source=src,
+                destination=dst,
+                mode=request.mode,
+                priority=request.priority,
+                custom_weights=request.custom_weights,
+                swarm_size=request.swarm_size,
+                max_iter=request.max_iterations
+            )
+        except Exception:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Routing service temporarily unavailable. Please retry. Error: {str(e)}"
+            )
+
     weights = qpso_optimizer.get_priority_weights(request.priority, request.custom_weights)
     
     return RouteResponse(
