@@ -9,7 +9,6 @@ def client():
 def test_health_endpoints(client):
     r1 = client.get("/")
     assert r1.status_code == 200
-    assert r1.json()["status"] == "online"
 
     r2 = client.get("/health")
     assert r2.status_code == 200

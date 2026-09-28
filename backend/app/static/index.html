@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>InfinityCore – Adaptive Quantum-Inspired Traffic Route Optimizer (SIH 2026)</title>
+    <meta name="description" content="Quantum-behaved Particle Swarm Optimization (QPSO) multi-objective traffic navigation and fleet logistics dispatch platform.">
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Leaflet CSS for OpenStreetMap (Zero API Keys) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/static/index.css">
+</head>
+<body class="dark-theme">
+    <div class="app-container">
+        <!-- TOP HEADER BAR -->
+        <header class="top-navbar">
+            <div class="brand-section">
+                <div class="quantum-logo-orb">
+                    <i class="fa-solid fa-infinity"></i>
+                </div>
+                <div class="brand-text">
+                    <div class="brand-title">InfinityCore <span class="quantum-badge">QPSO ENGINE</span></div>
+                    <div class="brand-subtitle">Smart India Hackathon 2026 • Grand Finale Edition</div>
+                </div>
+            </div>
+
+            <!-- Mode Switcher Tabs -->
+            <nav class="mode-tabs">
+                <button class="tab-btn active" data-tab="personal" id="tabPersonal">
+                    <i class="fa-solid fa-car-side"></i> Personal Commute
+                </button>
+                <button class="tab-btn" data-tab="fleet" id="tabFleet">
+                    <i class="fa-solid fa-truck-ramp-box"></i> Fleet Logistics VRP
+                </button>
+                <button class="tab-btn" data-tab="simulator" id="tabSimulator">
+                    <i class="fa-solid fa-flask-vial"></i> What-If Simulator
+                </button>
+                <button class="tab-btn emergency-tab" data-tab="emergency" id="tabEmergency">
+                    <i class="fa-solid fa-truck-medical"></i> Green Corridor
+                </button>
+            </nav>
+
+            <div class="header-actions">
+                <button class="btn btn-purple" id="btnJudgeConsole">
+                    <i class="fa-solid fa-bolt"></i> SIH Judge Demo Panel
+                </button>
+                <a href="/docs" target="_blank" class="api-docs-link" title="FastAPI Swagger Documentation">
+                    <i class="fa-solid fa-book"></i> API Docs
+                </a>
+            </div>
+        </header>
+
+        <!-- MAIN LAYOUT (SIDEBAR + MAP) -->
+        <main class="main-content">
+            <!-- SIDEBAR CONTROLS -->
+            <aside class="sidebar" id="sidebar">
+                <!-- 1. PERSONAL COMMUTE PANEL -->
+                <section class="panel-section active" id="personalPanel">
+                    <div class="panel-header">
+                        <h2><i class="fa-solid fa-route"></i> Quantum Route Planner</h2>
+                        <span class="hub-pill"><i class="fa-solid fa-city"></i> New Delhi Hub</span>
+                    </div>
+
+                    <!-- Origin & Destination -->
+                    <div class="input-card">
+                        <div class="field-group">
+                            <label><i class="fa-solid fa-circle-dot icon-origin"></i> Origin Location</label>
+                            <select id="originSelect" class="form-select">
+                                <option value="0">Connaught Place Central Hub (Node 0)</option>
+                                <option value="ndls_station">New Delhi Central Railway Station</option>
+                                <option value="india_gate">India Gate Boulevard</option>
+                                <option value="aiims_hospital">AIIMS Apex Trauma Center</option>
+                                <option value="cyber_tech_park">Quantum Tech City & IT Park</option>
+                                <option value="aerocity_hub">Indira Gandhi Airport Express</option>
+                                <option value="karol_bagh">Karol Bagh Commercial Hub</option>
+                            </select>
+                        </div>
+
+                        <div class="swap-divider">
+                            <button class="btn-icon-swap" id="btnSwapLocations" title="Swap Origin & Destination">
+                                <i class="fa-solid fa-arrow-right-arrow-left fa-rotate-90"></i>
+                            </button>
+                        </div>
+
+                        <div class="field-group">
+                            <label><i class="fa-solid fa-location-dot icon-dest"></i> Destination Location</label>
+                            <select id="destSelect" class="form-select">
+                                <option value="india_gate" selected>India Gate Boulevard</option>
+                                <option value="0">Connaught Place Central Hub</option>
+                                <option value="ndls_station">New Delhi Central Railway Station</option>
+                                <option value="pragati_maidan">Bharat Mandapam (Pragati Maidan)</option>
+                                <option value="aiims_hospital">AIIMS Apex Trauma Center</option>
+                                <option value="cyber_tech_park">Quantum Tech City & IT Park</option>
+                                <option value="aerocity_hub">Indira Gandhi Airport Express</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Priority Objective Selector -->
+                    <div class="priority-section">
+                        <label class="section-label">Optimization Priority Strategy</label>
+                        <div class="priority-grid">
+                            <button class="prio-pill active" data-prio="balanced">
+                                <span class="prio-icon">⚡</span>
+                                <span class="prio-text">Balanced</span>
+                            </button>
+                            <button class="prio-pill" data-prio="fastest">
+                                <span class="prio-icon">⏱️</span>
+                                <span class="prio-text">Fastest</span>
+                            </button>
+                            <button class="prio-pill" data-prio="less_congested">
+                                <span class="prio-icon">🚦</span>
+                                <span class="prio-text">Zero Traffic</span>
+                            </button>
+                            <button class="prio-pill" data-prio="smooth_roads">
+                                <span class="prio-icon">🛣️</span>
+                                <span class="prio-text">Smooth Road</span>
+                            </button>
+                            <button class="prio-pill" data-prio="shortest">
+                                <span class="prio-icon">📍</span>
+                                <span class="prio-text">Shortest</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Calculate Button -->
+                    <button class="btn btn-quantum-cta" id="btnComputeRoute">
+                        <i class="fa-solid fa-atom"></i> RUN QUANTUM ROUTE OPTIMIZATION
+                    </button>
+
+                    <!-- Route Comparison Result Card -->
+                    <div class="comparison-card" id="comparisonCard" style="display: none;">
+                        <div class="comparison-header">
+                            <div class="quantum-tag">
+                                <i class="fa-solid fa-wand-magic-sparkles"></i> QPSO QUANTUM OPTIMIZED
+                            </div>
+                            <span class="efficiency-badge" id="efficiencyScore">88% Efficient</span>
+                        </div>
+
+                        <div class="eta-distance-row">
+                            <div class="eta-time" id="qpsoTime">-- min</div>
+                            <div class="eta-dist" id="qpsoDist">(-- km)</div>
+                            <div class="time-saved-badge" id="timeSavedBadge">-3.4 min faster</div>
+                        </div>
+
+                        <!-- Metrics Grid -->
+                        <div class="metrics-grid">
+                            <div class="metric-box">
+                                <div class="metric-val cyan" id="metricCongAvoid">32%</div>
+                                <div class="metric-lbl"><i class="fa-solid fa-traffic-light"></i> Traffic Avoided</div>
+                            </div>
+                            <div class="metric-box">
+                                <div class="metric-val purple" id="metricSmoothness">92%</div>
+                                <div class="metric-lbl"><i class="fa-solid fa-road"></i> Road Quality</div>
+                            </div>
+                            <div class="metric-box">
+                                <div class="metric-val green" id="metricCarbon">0.4 kg</div>
+                                <div class="metric-lbl"><i class="fa-solid fa-leaf"></i> Carbon Saved</div>
+                            </div>
+                        </div>
+
+                        <!-- Start Live Navigation CTA -->
+                        <button class="btn btn-navigate" id="btnStartNav">
+                            <i class="fa-solid fa-location-arrow"></i> START QUANTUM LIVE NAVIGATION
+                        </button>
+                    </div>
+
+                    <!-- Turn-by-Turn Navigation Active Panel -->
+                    <div class="navigation-card" id="navigationCard" style="display: none;">
+                        <div class="nav-hud-header">
+                            <div class="nav-speed-badge">
+                                <span id="navSpeedVal">42</span> <small>km/h</small>
+                            </div>
+                            <div class="nav-step-info">
+                                <div class="nav-instr" id="navInstruction">Proceed onto Radial Janpath</div>
+                                <div class="nav-sub">Quantum Stream Active • Real-time detour monitoring</div>
+                            </div>
+                            <button class="btn-icon-close" id="btnStopNav" title="Stop Navigation">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 2. FLEET LOGISTICS VRP PANEL -->
+                <section class="panel-section" id="fleetPanel" style="display: none;">
+                    <div class="panel-header">
+                        <h2><i class="fa-solid fa-truck-fast"></i> Fleet Logistics VRP Solver</h2>
+                        <span class="hub-pill">Multi-Drop QPSO</span>
+                    </div>
+
+                    <div class="input-card">
+                        <label class="section-label">Logistics Depot Location</label>
+                        <select id="fleetDepotSelect" class="form-select">
+                            <option value="0">Central CP Logistics Hub</option>
+                            <option value="ndls_station">NDLS Transit Freight Terminal</option>
+                            <option value="aerocity_hub">Airport Cargo Logistics Depot</option>
+                        </select>
+                    </div>
+
+                    <div class="input-card">
+                        <div class="flex-between">
+                            <label class="section-label">Assigned Delivery Stops (<span id="stopCount">4</span>)</label>
+                            <button class="btn-text-link" id="btnAddDemoStop">+ Add Stop</button>
+                        </div>
+                        <ul class="stops-list" id="stopsListContainer">
+                            <!-- Dynamic Stops populated by JS -->
+                        </ul>
+                    </div>
+
+                    <div class="input-card">
+                        <label class="section-label">Vehicle Count Partitioning</label>
+                        <div class="vehicle-pills" id="vehiclePills">
+                            <button class="v-pill" data-count="1">1 Van</button>
+                            <button class="v-pill active" data-count="2">2 Vans</button>
+                            <button class="v-pill" data-count="3">3 Vans</button>
+                            <button class="v-pill" data-count="4">4 Vans</button>
+                        </div>
+                    </div>
+
+                    <button class="btn btn-quantum-cta" id="btnSolveFleet">
+                        <i class="fa-solid fa-microchip"></i> SOLVE QUANTUM FLEET VRP
+                    </button>
+
+                    <!-- Fleet Results Summary -->
+                    <div class="fleet-summary-card" id="fleetSummaryCard" style="display: none;">
+                        <div class="fleet-metrics-row">
+                            <div class="f-stat">
+                                <div class="f-val" id="fleetTotalTime">38 min</div>
+                                <div class="f-lbl">Total Time</div>
+                            </div>
+                            <div class="f-stat">
+                                <div class="f-val" id="fleetTotalDist">14.2 km</div>
+                                <div class="f-lbl">Total Distance</div>
+                            </div>
+                            <div class="f-stat">
+                                <div class="f-val" id="fleetTotalFuel">1.8 L</div>
+                                <div class="f-lbl">Fuel Est.</div>
+                            </div>
+                        </div>
+
+                        <div class="vehicle-tours-list" id="vehicleToursList">
+                            <!-- Tours rendered dynamically -->
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 3. WHAT-IF SCENARIO SIMULATOR PANEL -->
+                <section class="panel-section" id="simulatorPanel" style="display: none;">
+                    <div class="panel-header">
+                        <h2><i class="fa-solid fa-flask-vial"></i> What-If Traffic Simulator</h2>
+                        <span class="hub-pill">Pre-Trip Stress Test</span>
+                    </div>
+
+                    <div class="input-card">
+                        <label class="section-label">Scenario Preset</label>
+                        <select id="simPresetSelect" class="form-select">
+                            <option value="monsoon_rush">Morning Monsoon Flood Rush</option>
+                            <option value="evening_gridlock">Evening Peak Bottleneck</option>
+                            <option value="storm_closures">Severe Storm & Flyover Closures</option>
+                            <option value="offpeak_smooth">Midnight Smooth Transit</option>
+                        </select>
+                    </div>
+
+                    <div class="input-card">
+                        <div class="flex-between">
+                            <label class="section-label">Departure Time</label>
+                            <span class="time-display" id="simTimeDisplay">08:30 AM (🔴 PEAK RUSH)</span>
+                        </div>
+                        <input type="range" id="simTimeSlider" min="0" max="23.5" step="0.5" value="8.5" class="custom-range">
+                    </div>
+
+                    <div class="input-card">
+                        <label class="section-label">Weather Impact Multiplier</label>
+                        <div class="weather-grid">
+                            <button class="weather-pill active" data-weather="rain_monsoon">
+                                <i class="fa-solid fa-cloud-showers-heavy"></i> Monsoon Rain
+                            </button>
+                            <button class="weather-pill" data-weather="fog">
+                                <i class="fa-solid fa-smog"></i> Dense Fog
+                            </button>
+                            <button class="weather-pill" data-weather="clear">
+                                <i class="fa-solid fa-sun"></i> Clear
+                            </button>
+                        </div>
+                    </div>
+
+                    <button class="btn btn-quantum-cta" id="btnRunSimulation">
+                        <i class="fa-solid fa-play"></i> EXECUTE PRE-TRIP SIMULATION
+                    </button>
+
+                    <!-- Simulation Result View -->
+                    <div class="sim-results-card" id="simResultsCard" style="display: none;">
+                        <div class="ai-box">
+                            <div class="ai-header"><i class="fa-solid fa-brain"></i> INFINITYCORE AI ADAPTATION</div>
+                            <p class="ai-text" id="simAiRec">Analyzing traffic dynamics...</p>
+                        </div>
+
+                        <div class="sim-delta-grid">
+                            <div class="sim-delta-box red">
+                                <div class="s-title">Standard Route in Jam</div>
+                                <div class="s-time" id="simStdTime">28 min</div>
+                                <div class="s-desc">Gridlock delay</div>
+                            </div>
+                            <div class="sim-delta-box cyan">
+                                <div class="s-title">QPSO Detour in Jam</div>
+                                <div class="s-time" id="simQpsoTime">19 min</div>
+                                <div class="s-desc">Saved 9 min</div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </aside>
+
+            <!-- MAP SECTION -->
+            <section class="map-viewport">
+                <div id="map"></div>
+
+                <!-- FLOATING LIVE INCIDENT BANNER (Triggered via WebSocket) -->
+                <div class="live-incident-toast" id="liveIncidentToast" style="display: none;">
+                    <div class="toast-left">
+                        <div class="toast-icon-pulse"><i class="fa-solid fa-triangle-exclamation"></i></div>
+                        <div class="toast-body">
+                            <div class="toast-title">ACCIDENT DETECTED ON CURRENT ROUTE</div>
+                            <div class="toast-desc" id="toastDesc">Accident 800m ahead. InfinityCore QPSO recalculated detour.</div>
+                        </div>
+                    </div>
+                    <div class="toast-actions">
+                        <button class="btn btn-toast-accept" id="btnAcceptReroute">
+                            <i class="fa-solid fa-check"></i> ACCEPT DETOUR (-5.2 min)
+                        </button>
+                        <button class="btn btn-toast-ignore" id="btnIgnoreReroute">IGNORE</button>
+                    </div>
+                </div>
+
+                <!-- MAP LEGEND -->
+                <div class="map-legend">
+                    <div class="legend-item"><span class="leg-line qpso-line"></span> QPSO Quantum Route</div>
+                    <div class="legend-item"><span class="leg-line baseline-line"></span> Standard Route (Dijkstra)</div>
+                    <div class="legend-item"><span class="leg-dot origin-dot"></span> Origin</div>
+                    <div class="legend-item"><span class="leg-dot dest-dot"></span> Destination</div>
+                </div>
+            </section>
+        </main>
+
+        <!-- SIH JUDGE & DEVELOPER DEMO MODAL -->
+        <div class="modal-backdrop" id="judgeModal" style="display: none;">
+            <div class="modal-content glass-card">
+                <div class="modal-header">
+                    <div class="modal-title">
+                        <i class="fa-solid fa-bolt icon-purple"></i> SIH Judge Live Demonstration Console
+                    </div>
+                    <button class="btn-close-modal" id="btnCloseJudgeModal">&times;</button>
+                </div>
+                <p class="modal-desc">Inject live bottlenecks, roadblocks or accidents into the live road graph and watch the quantum engine dynamically adapt in real-time.</p>
+
+                <div class="demo-actions-grid">
+                    <div class="demo-card" id="btnInjectAccident">
+                        <div class="demo-icon red"><i class="fa-solid fa-car-burst"></i></div>
+                        <div class="demo-info">
+                            <h4>Inject Major Accident</h4>
+                            <p>Creates severe multi-vehicle bottleneck on arterial</p>
+                        </div>
+                    </div>
+
+                    <div class="demo-card" id="btnInjectClosure">
+                        <div class="demo-icon orange"><i class="fa-solid fa-road-barrier"></i></div>
+                        <div class="demo-info">
+                            <h4>Close Flyover / Bridge</h4>
+                            <p>Blocks traffic segment; tests instant detour</p>
+                        </div>
+                    </div>
+
+                    <div class="demo-card" id="btnInjectWaterlogging">
+                        <div class="demo-icon blue"><i class="fa-solid fa-water"></i></div>
+                        <div class="demo-info">
+                            <h4>Monsoon Flooding & Potholes</h4>
+                            <p>Degrades road quality score to test smoothness weighting</p>
+                        </div>
+                    </div>
+
+                    <div class="demo-card" id="btnInjectCongestion">
+                        <div class="demo-icon yellow"><i class="fa-solid fa-truck-monster"></i></div>
+                        <div class="demo-info">
+                            <h4>3.5x Traffic Surge Wave</h4>
+                            <p>Multiplies congestion factor on primary corridors</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button class="btn btn-outline" id="btnResetGraph">
+                        <i class="fa-solid fa-rotate-left"></i> RESTORE PRISTINE BASE GRAPH
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Leaflet JS for Map -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <!-- Custom Application JS -->
+    <script src="/static/app.js"></script>
+</body>
+</html>
